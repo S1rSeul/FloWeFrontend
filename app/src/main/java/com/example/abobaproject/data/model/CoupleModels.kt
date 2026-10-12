@@ -9,3 +9,6 @@ data class CoupleResponse(
     @SerializedName("partnerName") val partnerName: String?,
     @SerializedName("inviteCode") val inviteCode: String?
 )
+
+data class CreateCoupleRequest(val name: String)
+data class JoinCoupleRequest(@SerializedName("inviteCode") val inviteCode: String)

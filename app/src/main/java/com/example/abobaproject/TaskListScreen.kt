@@ -13,11 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +47,7 @@ fun TaskListScreen(
     taskViewModel: TaskViewModel,
     onCreateTaskClick: () -> Unit,
     onTaskClick: (String) -> Unit,
+    onLogoutClick: () -> Unit,             // 👈 НОВЫЙ параметр
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
@@ -84,11 +87,22 @@ fun TaskListScreen(
                     text = "Задачи FloWe",
                     style = MaterialTheme.typography.headlineMedium
                 )
-                // AND-19 Индикатор состояния
-                StatusIndicator(
-                    isOnline = taskViewModel.isPartnerOnline,
-                    onClick = { taskViewModel.togglePartnerStatus() }
-                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // AND-19 Индикатор состояния
+                    StatusIndicator(
+                        isOnline = taskViewModel.isPartnerOnline,
+                        onClick = { taskViewModel.togglePartnerStatus() }
+                    )
+
+                    // 👇 Кнопка выхода из аккаунта
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Выйти из аккаунта"
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

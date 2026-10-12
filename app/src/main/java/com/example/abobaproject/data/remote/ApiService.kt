@@ -1,5 +1,7 @@
 package com.example.abobaproject.data.remote
 
+import com.example.abobaproject.data.model.CreateCoupleRequest
+import com.example.abobaproject.data.model.JoinCoupleRequest
 import com.example.abobaproject.data.model.AuthResponse
 import com.example.abobaproject.data.model.CoupleResponse
 import com.example.abobaproject.data.model.LoginRequest
@@ -20,4 +22,10 @@ interface ApiService {
 
     @GET("couples/me")
     suspend fun getCoupleStatus(): CoupleResponse
+
+    @POST("couples")
+    suspend fun createCouple(@Body request: CreateCoupleRequest): CoupleResponse
+
+    @POST("couples/join")
+    suspend fun joinCouple(@Body request: JoinCoupleRequest): CoupleResponse
 }

@@ -112,21 +112,31 @@ class MainActivity : ComponentActivity() {
 
                     // 3. Экран "Нет пространства" (AND-11)
                     composable(Screen.NoSpace.route) {
+                        val spaceViewModel: SpaceViewModel = viewModel()
                         NoSpaceScreen(
-                            onCreateSpaceClick = {
-                                val code = mainViewModel.createNewSpace()
-                                navController.navigate(Screen.WaitingPartner.createRoute(code))
-                            },
-                            onJoinSpaceClick = { code ->
-                                if (mainViewModel.joinSpaceByCode(code)) {
-                                    navController.navigate(Screen.SpaceConnected.route) {
-                                        popUpTo(Screen.NoSpace.route) { inclusive = true }
+                            spaceViewModel = spaceViewModel,
+                            onSpaceReady = {
+                                when (val st = spaceViewModel.spaceState) {
+                                    is SpaceState.WaitingPartner -> {
+                                        val code = st.couple.inviteCode ?: ""
+                                        navController.navigate(Screen.WaitingPartner.createRoute(code)) {
+                                            popUpTo(Screen.NoSpace.route) { inclusive = true }
+                                        }
                                     }
+                                    is SpaceState.Active -> {
+                                        navController.navigate(Screen.TaskList.route) {
+                                            popUpTo(Screen.NoSpace.route) { inclusive = true }
+                                        }
+                                    }
+                                    else -> Unit
                                 }
                             },
                             onLogoutClick = {
-                                mainViewModel.logout()
-                                navController.navigate(Screen.Auth.route) { popUpTo(0) }
+                                spaceViewModel.logout {
+                                    navController.navigate(Screen.Auth.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
                             }
                         )
                     }
@@ -137,12 +147,15 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("inviteCode") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val inviteCode = backStackEntry.arguments?.getString("inviteCode") ?: ""
+                        val spaceViewModel: SpaceViewModel = viewModel()  // 👈 добавили
                         WaitingPartnerScreen(
                             inviteCode = inviteCode,
-                            onPartnerConnected = {
-                                mainViewModel.onPartnerJoined()
-                                navController.navigate(Screen.SpaceConnected.route) {
-                                    popUpTo(Screen.NoSpace.route) { inclusive = true }
+                            onPartnerConnected = { /* TODO: AND-20 */ },
+                            onLogoutClick = {                             // 👈 добавили
+                                spaceViewModel.logout {
+                                    navController.navigate(Screen.Auth.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
                                 }
                             }
                         )
@@ -162,11 +175,17 @@ class MainActivity : ComponentActivity() {
 
                     // 6. Список задач (AND-22)
                     composable(Screen.TaskList.route) {
+                        val spaceViewModel: SpaceViewModel = viewModel()
                         TaskListScreen(
                             taskViewModel = taskViewModel,
                             onCreateTaskClick = { navController.navigate(Screen.CreateTask.route) },
-                            onTaskClick = { taskId ->
-                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            onTaskClick = { taskId -> navController.navigate(Screen.TaskDetail.createRoute(taskId)) },
+                            onLogoutClick = {
+                                spaceViewModel.logout {
+                                    navController.navigate(Screen.Auth.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
                             }
                         )
                     }
@@ -197,10 +216,14 @@ class MainActivity : ComponentActivity() {
 
                     // 9. Главный экран
                     composable(Screen.Main.route) {
+                        val spaceViewModel: SpaceViewModel = viewModel()  // 👈 добавили
                         MainScreen(
                             onLogoutClick = {
-                                mainViewModel.logout()
-                                navController.navigate(Screen.Auth.route) { popUpTo(0) }
+                                spaceViewModel.logout {                    // 👈 заменили mainViewModel на spaceViewModel
+                                    navController.navigate(Screen.Auth.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
                             }
                         )
                     }
