@@ -37,6 +37,19 @@ android {
 }
 
 dependencies {
+    // CameraX — работа с камерой
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
+    // ML Kit — распознавание штрих-кодов и QR
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // Для запроса разрешений в Compose
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -56,4 +69,22 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Retrofit для сетевых запросов
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // OkHttp для перехватчиков (Interceptors)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // DataStore для безопасного хранения токенов
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Coroutines для асинхронности
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // ZXing для генерации QR-кодов
+    implementation("com.google.zxing:core:3.5.3")
 }
+

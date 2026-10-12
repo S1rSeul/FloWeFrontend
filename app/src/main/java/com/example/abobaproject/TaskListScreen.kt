@@ -1,6 +1,7 @@
 package com.example.abobaproject
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,6 +50,7 @@ fun TaskListScreen(
     taskViewModel: TaskViewModel,
     onCreateTaskClick: () -> Unit,
     onTaskClick: (String) -> Unit,
+    onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
@@ -84,11 +90,22 @@ fun TaskListScreen(
                     text = "Задачи FloWe",
                     style = MaterialTheme.typography.headlineMedium
                 )
-                // AND-19 Индикатор состояния
-                StatusIndicator(
-                    isOnline = taskViewModel.isPartnerOnline,
-                    onClick = { taskViewModel.togglePartnerStatus() }
-                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // AND-19 Индикатор состояния
+                    StatusIndicator(
+                        isOnline = taskViewModel.isPartnerOnline,
+                        onClick = { taskViewModel.togglePartnerStatus() }
+                    )
+
+                    // Кнопка выхода из аккаунта
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Выйти из аккаунта"
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -106,37 +123,78 @@ fun TaskListScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (filteredTasks.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Задач пока нет",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Нажмите +, чтобы добавить первую задачу",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+            // AND-34: Визуальные состояния
+            when {
+                // Загрузка (только когда список пустой — иначе не мигаем при обновлениях)
+                taskViewModel.isLoading && taskViewModel.tasks.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(filteredTasks, key = { it.id }) { task ->
-                        TaskItem(
-                            task = task,
-                            onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
-                            onClick = { onTaskClick(task.id) }
+
+                // Ошибка сети/сервера
+                taskViewModel.errorMessage != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Ошибка: ${taskViewModel.errorMessage}",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleMedium
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            taskViewModel.clearError()
+                            taskViewModel.refresh()
+                        }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+
+                // Пусто
+                filteredTasks.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Задач пока нет",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Нажмите +, чтобы добавить первую задачу",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                // Список задач
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredTasks, key = { it.id }) { task ->
+                            TaskItem(
+                                task = task,
+                                onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
+                                onClick = { onTaskClick(task.id) }
+                            )
+                        }
                     }
                 }
             }

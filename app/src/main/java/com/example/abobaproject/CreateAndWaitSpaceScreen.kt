@@ -1,27 +1,30 @@
 package com.example.abobaproject
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.abobaproject.ui.components.QrCodeImage
 
-// AND-13: Экран ожидания подключения партнера по сгенерированному коду
 @Composable
 fun WaitingPartnerScreen(
     inviteCode: String,
-    onPartnerConnected: () -> Unit
+    spaceViewModel: SpaceViewModel,
+    onPartnerConnected: () -> Unit,
+    onLogoutClick: () -> Unit
 ) {
+    LaunchedEffect(Unit) {
+        spaceViewModel.startPollingForPartner(onPartnerConnected)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { spaceViewModel.stopPolling() }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -29,35 +32,43 @@ fun WaitingPartnerScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Ваше пространство создано!",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        Text("Ваше пространство создано!", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(16.dp))
 
-        Text(text = "Поделитесь этим кодом с вашей второй половинкой:")
-        Spacer(modifier = Modifier.height(8.dp))
+        Text("Поделитесь этим кодом с вашей второй половинкой:")
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = inviteCode,
-            style = MaterialTheme.typography.displayMedium,
+            style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
+
+        QrCodeImage(
+            content = inviteCode,
+            modifier = Modifier.size(220.dp)
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = "Или попросите партнёра отсканировать QR-код",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(32.dp))
         CircularProgressIndicator()
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
+        Text("Ожидание подключения партнёра...")
 
-        Text(text = "Ожидание подключения партнёра...")
+        Spacer(Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Кнопка для ручной симуляции подключения партнёра (для отладки)
-        Button(
-            onClick = onPartnerConnected,
+        OutlinedButton(
+            onClick = onLogoutClick,
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Партнёр подключился (Имитация)")
-        }
+        ) { Text("Выйти из аккаунта") }
     }
 }

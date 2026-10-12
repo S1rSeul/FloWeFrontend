@@ -1,48 +1,95 @@
 package com.example.abobaproject
 
+import android.app.Application
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.abobaproject.data.TaskMapper
+import com.example.abobaproject.data.model.*
+import com.example.abobaproject.data.remote.NetworkModule
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
-class TaskViewModel : ViewModel() {
+class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val api = NetworkModule.provideApiService(application)
+
+    // === Данные ===
     private val _tasks = mutableStateListOf<Task>()
     val tasks: List<Task> get() = _tasks
 
-    var isPartnerOnline by mutableStateOf(true)
+    var members by mutableStateOf<List<MemberResponse>>(emptyList())
+        private set
+
+    var isPartnerOnline by mutableStateOf(false)
+        private set
+
+    // === AND-34: визуальные состояния ===
+    var isLoading by mutableStateOf(false)
+        private set
+    var errorMessage by mutableStateOf<String?>(null)
+        private set
+    var isEmpty by mutableStateOf(false)
         private set
 
     init {
-        val now = System.currentTimeMillis()
-        val oneDayMillis = 24 * 60 * 60 * 1000L
+        refresh()
+    }
 
-        _tasks.addAll(
-            listOf(
-                Task(
-                    title = "Купить продукты к ужину",
-                    description = "Молоко, сыр, овощи, хлеб",
-                    deadlineEpochMillis = now + oneDayMillis,
-                    assignee = TaskAssignee.BOTH,
-                    isCompleted = false
-                ),
-                Task(
-                    title = "Записаться к врачу",
-                    description = "Плановый осмотр",
-                    deadlineEpochMillis = now - oneDayMillis,
-                    assignee = TaskAssignee.ME,
-                    isCompleted = false
-                ),
-                Task(
-                    title = "Забрать посылку",
-                    description = "Пункт выдачи на улице Ленина",
-                    deadlineEpochMillis = now + 2 * oneDayMillis,
-                    assignee = TaskAssignee.PARTNER,
-                    isCompleted = true
-                )
-            )
-        )
+    /** Загрузка задач + участников пары */
+    fun refresh() {
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val membersList = api.getMembers()
+                members = membersList
+
+                val tasksPage = api.getTasks(sort = "createdAt", order = "desc")
+                _tasks.clear()
+                _tasks.addAll(tasksPage.items.map { TaskMapper.toClientTask(it) })
+
+                isEmpty = _tasks.isEmpty()
+                Log.d("TaskViewModel", "Загружено задач: ${_tasks.size}, участников: ${membersList.size}")
+            } catch (e: HttpException) {
+                Log.e("TaskViewModel", "HTTP: ${e.code()}", e)
+                errorMessage = "Ошибка сервера: ${e.code()}"
+            } catch (e: Exception) {
+                Log.e("TaskViewModel", "Сеть: ${e.message}", e)
+                errorMessage = e.message ?: "Ошибка сети"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // AND-25 + AND-33: Оптимистичное переключение статуса
+    fun toggleTaskCompleted(taskId: String) {
+        val index = _tasks.indexOfFirst { it.id == taskId }
+        if (index == -1) return
+        val old = _tasks[index]
+        val newStatus = if (old.isCompleted) "todo" else "done"
+
+        _tasks[index] = old.copy(isCompleted = !old.isCompleted)
+
+        viewModelScope.launch {
+            try {
+                val updated = api.updateTaskStatus(taskId, UpdateTaskStatusRequest(newStatus))
+                val fresh = TaskMapper.toClientTask(updated)
+                val i = _tasks.indexOfFirst { it.id == taskId }
+                if (i != -1) _tasks[i] = fresh
+            } catch (e: Exception) {
+                Log.e("TaskViewModel", "Ошибка смены статуса — откат", e)
+                val i = _tasks.indexOfFirst { it.id == taskId }
+                if (i != -1) _tasks[i] = old
+                errorMessage = "Не удалось изменить статус"
+            }
+        }
     }
 
     fun addTask(
@@ -52,20 +99,37 @@ class TaskViewModel : ViewModel() {
         assignee: TaskAssignee
     ) {
         if (title.isBlank()) return
-        val newTask = Task(
+
+        val tempId = "temp_${System.currentTimeMillis()}"
+        val optimistic = Task(
+            id = tempId,
             title = title.trim(),
             description = description.trim(),
             deadlineEpochMillis = deadlineEpochMillis,
             assignee = assignee
         )
-        _tasks.add(0, newTask)
-    }
+        _tasks.add(0, optimistic)
+        isEmpty = false
 
-    fun toggleTaskCompleted(taskId: String) {
-        val index = _tasks.indexOfFirst { it.id == taskId }
-        if (index != -1) {
-            val task = _tasks[index]
-            _tasks[index] = task.copy(isCompleted = !task.isCompleted)
+        viewModelScope.launch {
+            try {
+                val (toMe, toPartner) = TaskMapper.assigneeToFlags(assignee)
+                val request = CreateTaskRequest(
+                    title = title.trim(),
+                    description = description.trim().ifBlank { null },
+                    assignedToMe = toMe,
+                    assignedToPartner = toPartner,
+                    dueDate = TaskMapper.millisToIso(deadlineEpochMillis)
+                )
+                Log.d("TaskViewModel", "Отправляем: $request")
+                val created = api.createTask(request)
+                val idx = _tasks.indexOfFirst { it.id == tempId }
+                if (idx != -1) _tasks[idx] = TaskMapper.toClientTask(created)
+            } catch (e: Exception) {
+                Log.e("TaskViewModel", "Ошибка создания: ${e.message}", e)
+                _tasks.removeAll { it.id == tempId }
+                errorMessage = "Не удалось создать задачу"
+            }
         }
     }
 
@@ -78,26 +142,62 @@ class TaskViewModel : ViewModel() {
         isCompleted: Boolean
     ) {
         val index = _tasks.indexOfFirst { it.id == taskId }
-        if (index != -1) {
-            _tasks[index] = _tasks[index].copy(
-                title = title.trim(),
-                description = description.trim(),
-                deadlineEpochMillis = deadlineEpochMillis,
-                assignee = assignee,
-                isCompleted = isCompleted
-            )
+        if (index == -1) return
+        val old = _tasks[index]
+
+        _tasks[index] = old.copy(
+            title = title.trim(),
+            description = description.trim(),
+            deadlineEpochMillis = deadlineEpochMillis,
+            assignee = assignee,
+            isCompleted = isCompleted
+        )
+
+        viewModelScope.launch {
+            try {
+                val (toMe, toPartner) = TaskMapper.assigneeToFlags(assignee)
+                val request = UpdateTaskRequest(
+                    title = title.trim(),
+                    description = description.trim().ifBlank { null },
+                    assignedToMe = toMe,
+                    assignedToPartner = toPartner,
+                    dueDate = TaskMapper.millisToIso(deadlineEpochMillis)
+                )
+                val updated = api.updateTask(taskId, request)
+                val i = _tasks.indexOfFirst { it.id == taskId }
+                if (i != -1) _tasks[i] = TaskMapper.toClientTask(updated)
+            } catch (e: Exception) {
+                Log.e("TaskViewModel", "Ошибка обновления — откат", e)
+                val i = _tasks.indexOfFirst { it.id == taskId }
+                if (i != -1) _tasks[i] = old
+                errorMessage = "Не удалось сохранить изменения"
+            }
         }
     }
 
     fun deleteTask(taskId: String) {
-        _tasks.removeAll { it.id == taskId }
+        val index = _tasks.indexOfFirst { it.id == taskId }
+        if (index == -1) return
+        val removed = _tasks.removeAt(index)
+
+        viewModelScope.launch {
+            try {
+                api.deleteTask(taskId)
+            } catch (e: Exception) {
+                Log.e("TaskViewModel", "Ошибка удаления — откат", e)
+                _tasks.add(index, removed)
+                errorMessage = "Не удалось удалить задачу"
+            }
+        }
     }
 
-    fun getTaskById(taskId: String): Task? {
-        return _tasks.find { it.id == taskId }
-    }
+    fun getTaskById(taskId: String): Task? = _tasks.find { it.id == taskId }
 
     fun togglePartnerStatus() {
         isPartnerOnline = !isPartnerOnline
+    }
+
+    fun clearError() {
+        errorMessage = null
     }
 }
