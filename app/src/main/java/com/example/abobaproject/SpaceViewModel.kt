@@ -12,6 +12,8 @@ import com.example.abobaproject.data.model.CoupleResponse
 import com.example.abobaproject.data.model.CreateCoupleRequest
 import com.example.abobaproject.data.model.JoinCoupleRequest
 import com.example.abobaproject.data.remote.NetworkModule
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -28,6 +30,7 @@ class SpaceViewModel(application: Application) : AndroidViewModel(application) {
     private val api = NetworkModule.provideApiService(application)
     private val tokenManager = TokenManager(application)   // 👈 добавили
 
+    private var pollingJob: Job? = null
     var spaceState by mutableStateOf<SpaceState>(SpaceState.Loading)
         private set
 
@@ -104,7 +107,7 @@ class SpaceViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 🆕 AND-10 + смена аккаунта: полный logout
+    // AND-10 + смена аккаунта: полный logout
     fun logout(onComplete: () -> Unit) {
         viewModelScope.launch {
             Log.d("SpaceViewModel", "Logout: начинаем очистку...")
@@ -129,5 +132,31 @@ class SpaceViewModel(application: Application) : AndroidViewModel(application) {
     fun reset() {
         spaceState = SpaceState.Loading
         actionError = null
+    }
+
+    fun startPollingForPartner(onPartnerConnected: () -> Unit) {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    val couple = api.getCoupleStatus()
+                    Log.d("SpaceViewModel", "Polling: status=${couple.status}")
+                    if (couple.status.lowercase() == "active") {
+                        Log.d("SpaceViewModel", "Партнёр подключился!")
+                        spaceState = SpaceState.Active(couple)
+                        onPartnerConnected()
+                        break
+                    }
+                } catch (e: Exception) {
+                    Log.e("SpaceViewModel", "Polling error: ${e.message}", e)
+                }
+                delay(3000L)  // 3 секунды
+            }
+        }
+    }
+
+    fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
     }
 }

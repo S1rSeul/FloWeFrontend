@@ -3,6 +3,8 @@ package com.example.abobaproject
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -10,9 +12,18 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun WaitingPartnerScreen(
     inviteCode: String,
+    spaceViewModel: SpaceViewModel,
     onPartnerConnected: () -> Unit,
     onLogoutClick: () -> Unit   // <-- НОВЫЙ
 ) {
+    LaunchedEffect(Unit) {
+        spaceViewModel.startPollingForPartner(onPartnerConnected)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { spaceViewModel.stopPolling() }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -34,13 +45,6 @@ fun WaitingPartnerScreen(
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
         Text("Ожидание подключения партнёра...")
-
-        Spacer(Modifier.height(32.dp))
-
-        Button(
-            onClick = onPartnerConnected,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Партнёр подключился (Имитация)") }
 
         Spacer(Modifier.height(16.dp))
 

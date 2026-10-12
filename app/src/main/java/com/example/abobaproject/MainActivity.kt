@@ -147,15 +147,18 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("inviteCode") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val inviteCode = backStackEntry.arguments?.getString("inviteCode") ?: ""
-                        val spaceViewModel: SpaceViewModel = viewModel()  // 👈 добавили
+                        val spaceViewModel: SpaceViewModel = viewModel()
                         WaitingPartnerScreen(
                             inviteCode = inviteCode,
-                            onPartnerConnected = { /* TODO: AND-20 */ },
-                            onLogoutClick = {                             // 👈 добавили
+                            spaceViewModel = spaceViewModel,
+                            onPartnerConnected = {
+                                navController.navigate(Screen.TaskList.route) {
+                                    popUpTo(Screen.WaitingPartner.route) { inclusive = true }
+                                }
+                            },
+                            onLogoutClick = {
                                 spaceViewModel.logout {
-                                    navController.navigate(Screen.Auth.route) {
-                                        popUpTo(0) { inclusive = true }
-                                    }
+                                    navController.navigate(Screen.Auth.route) { popUpTo(0) { inclusive = true } }
                                 }
                             }
                         )
