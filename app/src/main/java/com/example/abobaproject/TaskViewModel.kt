@@ -52,16 +52,15 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
                 val tasksPage = api.getTasks(sort = "createdAt", order = "desc")
                 _tasks.clear()
-                _tasks.addAll(tasksPage.items.map { TaskMapper.toClientTask(it, membersList) })
+                _tasks.addAll(tasksPage.items.map { TaskMapper.toClientTask(it) })
 
                 isEmpty = _tasks.isEmpty()
                 Log.d("TaskViewModel", "Загружено задач: ${_tasks.size}, участников: ${membersList.size}")
             } catch (e: HttpException) {
-                val body = e.response()?.errorBody()?.string()
-                Log.e("TaskViewModel", "HTTP ошибка: $body", e)
+                Log.e("TaskViewModel", "HTTP: ${e.code()}", e)
                 errorMessage = "Ошибка сервера: ${e.code()}"
             } catch (e: Exception) {
-                Log.e("TaskViewModel", "Ошибка сети: ${e.message}", e)
+                Log.e("TaskViewModel", "Сеть: ${e.message}", e)
                 errorMessage = e.message ?: "Ошибка сети"
             } finally {
                 isLoading = false
@@ -76,19 +75,16 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         val old = _tasks[index]
         val newStatus = if (old.isCompleted) "todo" else "done"
 
-        // Оптимистично обновляем UI сразу
         _tasks[index] = old.copy(isCompleted = !old.isCompleted)
 
         viewModelScope.launch {
             try {
                 val updated = api.updateTaskStatus(taskId, UpdateTaskStatusRequest(newStatus))
-                // Синхронизируем с ответом сервера (на случай, если он что-то изменил)
-                val fresh = TaskMapper.toClientTask(updated, members)
+                val fresh = TaskMapper.toClientTask(updated)
                 val i = _tasks.indexOfFirst { it.id == taskId }
                 if (i != -1) _tasks[i] = fresh
             } catch (e: Exception) {
-                Log.e("TaskViewModel", "Ошибка смены статуса — откат: ${e.message}", e)
-                // Откат оптимистичного изменения
+                Log.e("TaskViewModel", "Ошибка смены статуса — откат", e)
                 val i = _tasks.indexOfFirst { it.id == taskId }
                 if (i != -1) _tasks[i] = old
                 errorMessage = "Не удалось изменить статус"
@@ -104,7 +100,6 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         if (title.isBlank()) return
 
-        // Оптимистично создаём временную задачу
         val tempId = "temp_${System.currentTimeMillis()}"
         val optimistic = Task(
             id = tempId,
@@ -118,18 +113,18 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
+                val (toMe, toPartner) = TaskMapper.assigneeToFlags(assignee)
                 val request = CreateTaskRequest(
                     title = title.trim(),
                     description = description.trim().ifBlank { null },
-                    assigneeId = TaskMapper.assigneeToId(assignee, members),
-                    deadline = TaskMapper.millisToIso(deadlineEpochMillis)
+                    assignedToMe = toMe,
+                    assignedToPartner = toPartner,
+                    dueDate = TaskMapper.millisToIso(deadlineEpochMillis)
                 )
+                Log.d("TaskViewModel", "Отправляем: $request")
                 val created = api.createTask(request)
-                // Заменяем временную задачу реальной
                 val idx = _tasks.indexOfFirst { it.id == tempId }
-                if (idx != -1) {
-                    _tasks[idx] = TaskMapper.toClientTask(created, members)
-                }
+                if (idx != -1) _tasks[idx] = TaskMapper.toClientTask(created)
             } catch (e: Exception) {
                 Log.e("TaskViewModel", "Ошибка создания: ${e.message}", e)
                 _tasks.removeAll { it.id == tempId }
@@ -150,7 +145,6 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         if (index == -1) return
         val old = _tasks[index]
 
-        // Оптимистичное обновление
         _tasks[index] = old.copy(
             title = title.trim(),
             description = description.trim(),
@@ -161,15 +155,17 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
+                val (toMe, toPartner) = TaskMapper.assigneeToFlags(assignee)
                 val request = UpdateTaskRequest(
                     title = title.trim(),
                     description = description.trim().ifBlank { null },
-                    assigneeId = TaskMapper.assigneeToId(assignee, members),
-                    deadline = TaskMapper.millisToIso(deadlineEpochMillis)
+                    assignedToMe = toMe,
+                    assignedToPartner = toPartner,
+                    dueDate = TaskMapper.millisToIso(deadlineEpochMillis)
                 )
                 val updated = api.updateTask(taskId, request)
                 val i = _tasks.indexOfFirst { it.id == taskId }
-                if (i != -1) _tasks[i] = TaskMapper.toClientTask(updated, members)
+                if (i != -1) _tasks[i] = TaskMapper.toClientTask(updated)
             } catch (e: Exception) {
                 Log.e("TaskViewModel", "Ошибка обновления — откат", e)
                 val i = _tasks.indexOfFirst { it.id == taskId }

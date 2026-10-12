@@ -2,25 +2,42 @@ package com.example.abobaproject.data
 
 import com.example.abobaproject.Task
 import com.example.abobaproject.TaskAssignee
-import com.example.abobaproject.data.model.MemberResponse
 import com.example.abobaproject.data.model.TaskResponse
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 object TaskMapper {
 
-    // ISO 8601 с миллисекундами и Z-таймзоной — как в примерах Swagger
     private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
+    private val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",  // 6 миллисекунд
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",     // 3 миллисекунды
+        "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",      // 2 миллисекунды
+        "yyyy-MM-dd'T'HH:mm:ss.S'Z'",       // 1 миллисекунда
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"          // без миллисекунд
+    )
+
+    private fun parseIso(iso: String): Date? {
+        for (pattern in patterns) {
+            try {
+                val fmt = SimpleDateFormat(pattern, Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                    isLenient = false
+                }
+                return fmt.parse(iso)
+            } catch (_: Exception) { /* пробуем следующий */ }
+        }
+        return null
+    }
+
     fun isoToMillis(iso: String?): Long? {
         if (iso.isNullOrBlank()) return null
-        return try {
-            isoFormat.parse(iso)?.time
-        } catch (e: Exception) {
-            null
-        }
+        return parseIso(iso)?.time
     }
 
     fun millisToIso(millis: Long?): String? {
@@ -29,28 +46,19 @@ object TaskMapper {
     }
 
     /**
-     * Конвертация серверной задачи в клиентскую модель.
-     * assigneeId сравнивается со списком членов пары для определения ME / PARTNER / BOTH.
+     * Клиентская модель: assignee определяется по двум булевым полям.
      */
-    fun toClientTask(
-        resp: TaskResponse,
-        members: List<MemberResponse>
-    ): Task {
-        val myMember = members.firstOrNull { it.isMe }
-        val partnerMember = members.firstOrNull { !it.isMe }
-
-        val assignee = when (resp.assigneeId) {
-            null -> TaskAssignee.BOTH
-            myMember?.id -> TaskAssignee.ME
-            partnerMember?.id -> TaskAssignee.PARTNER
-            else -> TaskAssignee.BOTH
+    fun toClientTask(resp: TaskResponse): Task {
+        val assignee = when {
+            resp.assignedToMe && resp.assignedToPartner -> TaskAssignee.BOTH
+            resp.assignedToPartner -> TaskAssignee.PARTNER
+            else -> TaskAssignee.ME
         }
-
         return Task(
             id = resp.id,
             title = resp.title,
             description = resp.description ?: "",
-            deadlineEpochMillis = isoToMillis(resp.deadline),
+            deadlineEpochMillis = isoToMillis(resp.dueDate),
             assignee = assignee,
             isCompleted = resp.status == "done",
             createdAtEpochMillis = isoToMillis(resp.createdAt) ?: System.currentTimeMillis()
@@ -58,17 +66,13 @@ object TaskMapper {
     }
 
     /**
-     * Обратная конвертация: выбор assigneeId по клиентскому enum.
-     * BOTH → null (сервер трактует как «вместе»).
+     * Обратный маппинг: TaskAssignee → две булевых.
      */
-    fun assigneeToId(
-        assignee: TaskAssignee,
-        members: List<MemberResponse>
-    ): String? {
+    fun assigneeToFlags(assignee: TaskAssignee): Pair<Boolean, Boolean> {
         return when (assignee) {
-            TaskAssignee.ME -> members.firstOrNull { it.isMe }?.id
-            TaskAssignee.PARTNER -> members.firstOrNull { !it.isMe }?.id
-            TaskAssignee.BOTH -> null
+            TaskAssignee.ME -> true to false
+            TaskAssignee.PARTNER -> false to true
+            TaskAssignee.BOTH -> true to true
         }
     }
 }
