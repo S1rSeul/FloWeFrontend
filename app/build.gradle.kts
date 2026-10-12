@@ -37,6 +37,19 @@ android {
 }
 
 dependencies {
+    // CameraX — работа с камерой
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
+    // ML Kit — распознавание штрих-кодов и QR
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // Для запроса разрешений в Compose
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -74,3 +87,4 @@ dependencies {
     // ZXing для генерации QR-кодов
     implementation("com.google.zxing:core:3.5.3")
 }
+

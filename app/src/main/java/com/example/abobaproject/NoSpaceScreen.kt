@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 fun NoSpaceScreen(
     spaceViewModel: SpaceViewModel,
     onSpaceReady: () -> Unit,       // вызывается когда пара создана/присоединена
+    onScanQrClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
     var inputCode by remember { mutableStateOf("") }
@@ -75,6 +76,16 @@ fun NoSpaceScreen(
             enabled = inputCode.isNotBlank() && !spaceViewModel.isActionLoading,
             modifier = Modifier.fillMaxWidth()
         ) { Text("Присоединиться") }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onScanQrClick,
+            enabled = !spaceViewModel.isActionLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Сканировать QR-код")
+        }
 
         spaceViewModel.actionError?.let { error ->
             Spacer(Modifier.height(16.dp))

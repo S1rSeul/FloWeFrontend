@@ -16,4 +16,6 @@ sealed class Screen(val route: String) {
         fun createRoute(taskId: String) = "task_detail_screen/$taskId"
     }
     object Main : Screen("main_screen")
+
+    object QrScanner : Screen("qr_scanner_screen")
 }

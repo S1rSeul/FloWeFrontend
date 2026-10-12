@@ -1,6 +1,7 @@
 package com.example.abobaproject
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -131,6 +132,9 @@ class MainActivity : ComponentActivity() {
                                     else -> Unit
                                 }
                             },
+                            onScanQrClick = {
+                                navController.navigate(Screen.QrScanner.route)
+                            },
                             onLogoutClick = {
                                 spaceViewModel.logout {
                                     navController.navigate(Screen.Auth.route) {
@@ -229,6 +233,30 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                    }
+
+                    // 10. Сканер QR-кода (AND-17)
+                    composable(Screen.QrScanner.route) {
+                        val spaceViewModel: SpaceViewModel = viewModel()
+
+                        QrScannerScreen(
+                            onQrScanned = { scannedCode ->
+                                Log.d("MainActivity", "QR отсканирован: $scannedCode")
+                                // Передаём код в SpaceViewModel — тот сам вызовет /couples/join
+                                spaceViewModel.joinCouple(scannedCode)
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
+
+                        // Реагируем на смену состояния — как только пара активна, переходим
+                        LaunchedEffect(spaceViewModel.spaceState) {
+                            val st = spaceViewModel.spaceState
+                            if (st is SpaceState.Active || st is SpaceState.WaitingPartner) {
+                                navController.navigate(Screen.TaskList.route) {
+                                    popUpTo(Screen.QrScanner.route) { inclusive = true }
+                                }
+                            }
+                        }
                     }
                 }
             }
