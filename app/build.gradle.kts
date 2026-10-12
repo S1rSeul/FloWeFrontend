@@ -70,4 +70,7 @@ dependencies {
 
     // Coroutines для асинхронности
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // ZXing для генерации QR-кодов
+    implementation("com.google.zxing:core:3.5.3")
 }

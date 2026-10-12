@@ -8,13 +8,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.abobaproject.ui.components.QrCodeImage
 
 @Composable
 fun WaitingPartnerScreen(
     inviteCode: String,
     spaceViewModel: SpaceViewModel,
     onPartnerConnected: () -> Unit,
-    onLogoutClick: () -> Unit   // <-- НОВЫЙ
+    onLogoutClick: () -> Unit
 ) {
     LaunchedEffect(Unit) {
         spaceViewModel.startPollingForPartner(onPartnerConnected)
@@ -25,7 +26,9 @@ fun WaitingPartnerScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -41,12 +44,27 @@ fun WaitingPartnerScreen(
             color = MaterialTheme.colorScheme.primary
         )
 
+        Spacer(Modifier.height(24.dp))
+
+        QrCodeImage(
+            content = inviteCode,
+            modifier = Modifier.size(220.dp)
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = "Или попросите партнёра отсканировать QR-код",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         Spacer(Modifier.height(32.dp))
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
         Text("Ожидание подключения партнёра...")
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
 
         OutlinedButton(
             onClick = onLogoutClick,
