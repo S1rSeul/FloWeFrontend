@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -30,6 +31,12 @@ fun AuthScreen(
     viewModel: RegisterViewModel = viewModel()
 ) {
     var isLoginMode by remember { mutableStateOf(true) }
+
+    LaunchedEffect(viewModel.isAuthSuccess) {
+        if (viewModel.isAuthSuccess) {
+            onAuthSuccess()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -85,14 +92,14 @@ fun AuthScreen(
         } else {
             Button(
                 onClick = {
+                    // Сбрасываем состояние прошлых попыток
+                    viewModel.resetAuthState()
+
+                    // Просто запускаем запрос. Навигация сработает сама через LaunchedEffect
                     if (isLoginMode) {
-                        // Логика входа
-                        onAuthSuccess()
+                        viewModel.onLoginClick()
                     } else {
                         viewModel.onRegisterClick()
-                        if (viewModel.errorMessage == null) {
-                            onAuthSuccess()
-                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

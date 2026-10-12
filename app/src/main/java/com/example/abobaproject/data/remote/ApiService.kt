@@ -4,6 +4,7 @@ import com.example.abobaproject.data.model.AuthResponse
 import com.example.abobaproject.data.model.LoginRequest
 import com.example.abobaproject.data.model.RegisterRequest
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 
 interface ApiService {
@@ -12,4 +13,10 @@ interface ApiService {
 
     @POST("auth/register")
     suspend fun register(@Body request: RegisterRequest): AuthResponse
+
+    @POST("auth/logout")
+    suspend fun logout()
+
+    @GET("couples/me")
+    suspend fun getCoupleStatus(): Any // Пока Any, потом заменим на нормальную модель
 }

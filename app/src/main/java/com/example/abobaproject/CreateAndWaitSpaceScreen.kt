@@ -15,12 +15,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 // AND-13: Экран ожидания подключения партнера по сгенерированному коду
 @Composable
 fun WaitingPartnerScreen(
     inviteCode: String,
-    onPartnerConnected: () -> Unit
+    onPartnerConnected: () -> Unit,
+    viewModel: RegisterViewModel = viewModel()
 ) {
     Column(
         modifier = Modifier
@@ -58,6 +60,12 @@ fun WaitingPartnerScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Партнёр подключился (Имитация)")
+        }
+        Button(
+            onClick = { viewModel.testAuthorizedRequest() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Тестовый авторизованный запрос")
         }
     }
 }
