@@ -1,7 +1,9 @@
 package com.example.abobaproject
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash_screen")
     object Auth : Screen("auth_screen")
+    object Routing : Screen("routing_screen")
     object NoSpace : Screen("no_space_screen")
     object CreateSpace : Screen("create_space_screen")
     object WaitingPartner : Screen("waiting_partner_screen/{inviteCode}") {

@@ -61,11 +61,5 @@ fun WaitingPartnerScreen(
         ) {
             Text("Партнёр подключился (Имитация)")
         }
-        Button(
-            onClick = { viewModel.testAuthorizedRequest() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Тестовый авторизованный запрос")
-        }
     }
 }

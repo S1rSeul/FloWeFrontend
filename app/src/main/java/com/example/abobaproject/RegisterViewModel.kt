@@ -58,22 +58,6 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
         errorMessage = null
     }
 
-    fun testAuthorizedRequest() {
-        viewModelScope.launch {
-            try {
-                Log.d("SpaceViewModel", "Отправка GET /couples/me...")
-                val response = api.getCoupleStatus()
-                Log.d("SpaceViewModel", "УСПЕХ! Ответ: $response")
-            } catch (e: Exception) {
-                Log.e("SpaceViewModel", "Ошибка: ${e.message}", e)
-                // Если 404 — это значит токен принят, но пары нет. Это тоже УСПЕХ для AND-07!
-                if (e is retrofit2.HttpException && e.code() == 404) {
-                    Log.d("SpaceViewModel", "Токен принят, пары нет (404). AND-07 работает!")
-                }
-            }
-        }
-    }
-
     fun onLoginClick() {
         if (email.isBlank() || password.isBlank()) {
             errorMessage = "Заполните все поля"

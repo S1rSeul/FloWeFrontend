@@ -1,6 +1,7 @@
 package com.example.abobaproject.data.remote
 
 import com.example.abobaproject.data.model.AuthResponse
+import com.example.abobaproject.data.model.CoupleResponse
 import com.example.abobaproject.data.model.LoginRequest
 import com.example.abobaproject.data.model.RegisterRequest
 import retrofit2.http.Body
@@ -18,5 +19,5 @@ interface ApiService {
     suspend fun logout()
 
     @GET("couples/me")
-    suspend fun getCoupleStatus(): Any // Пока Any, потом заменим на нормальную модель
+    suspend fun getCoupleStatus(): CoupleResponse
 }
