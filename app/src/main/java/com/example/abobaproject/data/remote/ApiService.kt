@@ -1,6 +1,7 @@
 package com.example.abobaproject.data.remote
 
 import com.example.abobaproject.data.model.*
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -49,7 +50,7 @@ interface ApiService {
     ): TaskResponse
 
     @DELETE("tasks/{id}")
-    suspend fun deleteTask(@Path("id") id: String)
+    suspend fun deleteTask(@Path("id") id: String): Response<Unit>
 
     @PATCH("tasks/{id}/status")
     suspend fun updateTaskStatus(

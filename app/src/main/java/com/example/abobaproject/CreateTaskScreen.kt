@@ -180,7 +180,7 @@ fun CreateTaskScreen(
             }
 
             Text(
-                text = "Дедлайн (AND-30):",
+                text = "Дедлайн:",
                 style = MaterialTheme.typography.titleSmall
             )
 

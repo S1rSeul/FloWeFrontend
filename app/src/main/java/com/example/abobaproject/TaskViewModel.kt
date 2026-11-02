@@ -37,10 +37,6 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     var isEmpty by mutableStateOf(false)
         private set
 
-    init {
-        refresh()
-    }
-
     /** Загрузка задач + участников пары */
     fun refresh() {
         viewModelScope.launch {
@@ -178,14 +174,25 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteTask(taskId: String) {
         val index = _tasks.indexOfFirst { it.id == taskId }
         if (index == -1) return
+
         val removed = _tasks.removeAt(index)
 
         viewModelScope.launch {
             try {
-                api.deleteTask(taskId)
+                val response = api.deleteTask(taskId)
+
+                if (!response.isSuccessful && response.code() != 404) {
+                    throw retrofit2.HttpException(response)
+                }
+                Log.d("TaskViewModel", "Задача успешно удалена или уже была удалена")
+
             } catch (e: Exception) {
                 Log.e("TaskViewModel", "Ошибка удаления — откат", e)
-                _tasks.add(index, removed)
+
+                if (_tasks.none { it.id == taskId }) {
+                    _tasks.add(removed)
+                }
+
                 errorMessage = "Не удалось удалить задачу"
             }
         }
