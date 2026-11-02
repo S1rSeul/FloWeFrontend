@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +56,7 @@ fun TaskListScreen(
     onCreateTaskClick: () -> Unit,
     onTaskClick: (String) -> Unit,
     onLogoutClick: () -> Unit,
+    onCalendarClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
@@ -91,20 +93,33 @@ fun TaskListScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                //horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Задачи FloWe",
-                    style = MaterialTheme.typography.headlineMedium
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1 // Запрещаем переносить текст на новую строку
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(0.dp) // Убираем лишние отступы между кнопками
+                ) {
                     // AND-19 Индикатор состояния
                     StatusIndicator(
                         isOnline = taskViewModel.isPartnerOnline,
                         onClick = { taskViewModel.togglePartnerStatus() }
                     )
+
+                    // Кнопка перехода в Календарь
+                    IconButton(onClick = onCalendarClick) {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = "Календарь"
+                        )
+                    }
 
                     // Кнопка выхода из аккаунта
                     IconButton(onClick = onLogoutClick) {

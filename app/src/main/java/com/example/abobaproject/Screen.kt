@@ -18,4 +18,11 @@ sealed class Screen(val route: String) {
     object Main : Screen("main_screen")
 
     object QrScanner : Screen("qr_scanner_screen")
+
+    object Calendar : Screen("calendar_screen")
+    object CreateEvent : Screen("create_event_screen")
+
+    object EditEvent : Screen("edit_event_screen/{eventId}") {
+        fun createRoute(eventId: String) = "edit_event_screen/$eventId"
+    }
 }

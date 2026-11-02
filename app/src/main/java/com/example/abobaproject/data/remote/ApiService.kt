@@ -60,4 +60,22 @@ interface ApiService {
 
     @GET("couples/me/members")
     suspend fun getMembers(): List<MemberResponse>
+
+    @GET("calendar")
+    suspend fun getCalendar(
+        @Query("from") from: String,
+        @Query("to") to: String
+    ): List<CalendarItemDto>
+
+    @POST("events")
+    suspend fun createEvent(@Body request: CreateEventRequestDto): EventResponseDto
+
+    @DELETE("events/{id}")
+    suspend fun deleteEvent(@Path("id") eventId: String): Response<Unit>
+
+    @PATCH("events/{id}")
+    suspend fun updateEvent(
+        @Path("id") eventId: String,
+        @Body request: UpdateEventRequestDto
+    ): EventResponseDto
 }

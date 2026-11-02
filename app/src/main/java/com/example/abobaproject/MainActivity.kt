@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val mainViewModel: MainViewModel = viewModel()
                 val taskViewModel: TaskViewModel = viewModel()
+                val calendarViewModel: CalendarViewModel = viewModel()
 
                 NavHost(
                     navController = navController,
@@ -193,7 +194,8 @@ class MainActivity : ComponentActivity() {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 }
-                            }
+                            },
+                            onCalendarClick = { navController.navigate(Screen.Calendar.route) }
                         )
                     }
 
@@ -223,10 +225,10 @@ class MainActivity : ComponentActivity() {
 
                     // 9. Главный экран
                     composable(Screen.Main.route) {
-                        val spaceViewModel: SpaceViewModel = viewModel()  // 👈 добавили
+                        val spaceViewModel: SpaceViewModel = viewModel()
                         MainScreen(
                             onLogoutClick = {
-                                spaceViewModel.logout {                    // 👈 заменили mainViewModel на spaceViewModel
+                                spaceViewModel.logout {
                                     navController.navigate(Screen.Auth.route) {
                                         popUpTo(0) { inclusive = true }
                                     }
@@ -257,6 +259,51 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+
+                    composable(Screen.CreateEvent.route) {
+                        val calendarViewModel: CalendarViewModel = viewModel()
+                        CreateEventScreen(
+                            onEventCreated = { title, desc, start, end ->
+                                calendarViewModel.addEvent(title, desc, start, end) {
+                                    navController.popBackStack() // Возвращаемся в календарь после создания
+                                }
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(Screen.Calendar.route) {
+                        CalendarScreen(
+                            viewModel = calendarViewModel,
+                            onTaskClick = { taskId ->
+                                // Переход к деталям задачи
+                                navController.navigate(Screen.TaskDetail.createRoute(taskId))
+                            },
+                            onEventClick = { eventId -> navController.navigate(Screen.EditEvent.createRoute(eventId)) },
+                            onCreateEventClick = {
+                                navController.navigate(Screen.CreateEvent.route)
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(
+                        route = Screen.EditEvent.route,
+                        arguments = listOf(navArgument("eventId") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val eventId = backStackEntry.arguments?.getString("eventId") ?: ""
+                        val event = calendarViewModel.getEventById(eventId)
+
+                        EditEventScreen(
+                            event = event,
+                            onSaveClick = { title, desc, start, end ->
+                                calendarViewModel.updateEvent(eventId, title, desc, start, end) {
+                                    navController.popBackStack()
+                                }
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
                     }
                 }
             }
