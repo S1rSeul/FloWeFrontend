@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
@@ -26,7 +28,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +63,10 @@ fun TaskListScreen(
         TaskFilter.ALL -> taskViewModel.tasks
         TaskFilter.ACTIVE -> taskViewModel.tasks.filter { !it.isCompleted }
         TaskFilter.COMPLETED -> taskViewModel.tasks.filter { it.isCompleted }
+    }
+
+    LaunchedEffect(Unit) {
+        taskViewModel.refresh()
     }
 
     Scaffold(
@@ -124,76 +132,86 @@ fun TaskListScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // AND-34: Визуальные состояния
-            when {
-                // Загрузка (только когда список пустой — иначе не мигаем при обновлениях)
-                taskViewModel.isLoading && taskViewModel.tasks.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                // Ошибка сети/сервера
-                taskViewModel.errorMessage != null -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Ошибка: ${taskViewModel.errorMessage}",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = {
-                            taskViewModel.clearError()
-                            taskViewModel.refresh()
-                        }) {
-                            Text("Повторить")
+            PullToRefreshBox(
+                isRefreshing = taskViewModel.isLoading,
+                onRefresh = { taskViewModel.refresh() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // Занимает всё оставшееся место
+            ) {
+                when {
+                    // Загрузка (только когда список пустой)
+                    taskViewModel.isLoading && taskViewModel.tasks.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
-                }
 
-                // Пусто
-                filteredTasks.isEmpty() -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Задач пока нет",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Нажмите +, чтобы добавить первую задачу",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                }
-
-                // Список задач
-                else -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(filteredTasks, key = { it.id }) { task ->
-                            TaskItem(
-                                task = task,
-                                onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
-                                onClick = { onTaskClick(task.id) }
+                    // Ошибка сети/сервера
+                    taskViewModel.errorMessage != null -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()) // Чтобы свайп работал
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Ошибка: ${taskViewModel.errorMessage}",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.titleMedium
                             )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = {
+                                taskViewModel.clearError()
+                                taskViewModel.refresh()
+                            }) {
+                                Text("Повторить")
+                            }
+                        }
+                    }
+
+                    // Пусто
+                    filteredTasks.isEmpty() -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()) // Чтобы свайп работал
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Задач пока нет",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Потяните вниз для обновления или нажмите +",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+
+                    // Список задач
+                    else -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(bottom = 80.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(filteredTasks, key = { it.id }) { task ->
+                                TaskItem(
+                                    task = task,
+                                    onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
+                                    onClick = { onTaskClick(task.id) }
+                                )
+                            }
                         }
                     }
                 }
