@@ -1,6 +1,7 @@
 package com.example.abobaproject
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -27,10 +28,10 @@ import java.util.TimeZone
 fun MonthView(
     currentMonth: Calendar,
     items: List<CalendarItemDto>,
-    onDayClick: (Long) -> Unit // Передает timestamp выбранного дня
+    onDayClick: (Long) -> Unit
 ) {
-    // Получаем первый день месяца и количество дней в нем
-    val calendar = remember(currentMonth) {
+    // Получаем первый день месяца и количество дней
+    val calendar = remember(currentMonth.timeInMillis) {
         (currentMonth.clone() as Calendar).apply {
             set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
@@ -41,15 +42,29 @@ fun MonthView(
     }
 
     val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-    // Вычисляем сдвиг: какой день недели первый в месяце (1 = Пн, 7 = Вс)
-    // В Calendar воскресенье = 1, понедельник = 2. Нам нужно привести к стандарту Пн-Вс.
     val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
     val offset = if (firstDayOfWeek == Calendar.SUNDAY) 6 else firstDayOfWeek - 2
 
-    // Парсер для получения дня из строки (например, из "2026-11-09T20:40:11Z" делает "9")
-    val dateParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC") // Бэкенд отдает в UTC
+    // ОПТИМИЗАЦИЯ: Группируем события по дням ОДИН раз при изменении списка items
+    val itemsByDay = remember(items) {
+        val map = mutableMapOf<String, List<CalendarItemDto>>()
+        val dateParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        items.forEach { item ->
+            try {
+                // Берем первые 19 символов для парсинга (yyyy-MM-dd'T'HH:mm:ss)
+                val date = dateParser.parse(item.startsAt.take(19))
+                if (date != null) {
+                    val itemCal = Calendar.getInstance().apply { time = date }
+                    // Ключ формата "yyyy-MM-dd" (например, "2026-11-15")
+                    val key = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(itemCal.time)
+                    map[key] = map.getOrDefault(key, emptyList()) + item
+                }
+            } catch (_: Exception) { }
+        }
+        map
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -69,7 +84,6 @@ fun MonthView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Сетка дней
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             modifier = Modifier.fillMaxSize()
@@ -85,26 +99,16 @@ fun MonthView(
                 val dayCalendar = (calendar.clone() as Calendar).apply {
                     set(Calendar.DAY_OF_MONTH, dayNumber)
                 }
-                val dayMillis = dayCalendar.timeInMillis
 
-                // Ищем задачи/события на этот день
-                val dayItems = items.filter { item ->
-                    val itemDate = item.startsAt.let {
-                        try { dateParser.parse(it.take(19)) } catch (e: Exception) { null }
-                    }
-                    if (itemDate != null) {
-                        val itemCal = Calendar.getInstance().apply { time = itemDate }
-                        itemCal.get(Calendar.DAY_OF_MONTH) == dayNumber &&
-                                itemCal.get(Calendar.MONTH) == calendar.get(Calendar.MONTH) &&
-                                itemCal.get(Calendar.YEAR) == calendar.get(Calendar.YEAR)
-                    } else false
-                }
+                // Формируем ключ для быстрого поиска (например, "2026-11-01")
+                val dayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dayCalendar.time)
+                val dayItems = itemsByDay[dayKey] ?: emptyList()
 
                 DayCell(
                     dayNumber = dayNumber,
                     hasItems = dayItems.isNotEmpty(),
                     isToday = isToday(dayCalendar),
-                    onClick = { onDayClick(dayMillis) }
+                    onClick = { onDayClick(dayCalendar.timeInMillis) }
                 )
             }
         }
@@ -118,7 +122,8 @@ fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> 
             .aspectRatio(1f)
             .padding(4.dp)
             .clip(CircleShape)
-            .background(if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
+            .background(if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,7 +132,6 @@ fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> 
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                 color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             )
-            // Индикатор (точка), если есть задачи
             if (hasItems) {
                 Box(
                     modifier = Modifier

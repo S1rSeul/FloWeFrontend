@@ -181,4 +181,25 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    // Надежный парсер дат (как в TaskMapper)
+    private fun parseIsoToCalendar(isoString: String): Calendar? {
+        val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.S'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        )
+        for (pattern in patterns) {
+            try {
+                val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+                val date = sdf.parse(isoString) ?: continue
+                return Calendar.getInstance().apply { time = date }
+            } catch (_: Exception) { }
+        }
+        return null
+    }
 }

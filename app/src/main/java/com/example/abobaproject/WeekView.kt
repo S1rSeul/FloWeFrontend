@@ -44,11 +44,6 @@ fun WeekView(
         }
     }
 
-    // Парсер времени
-    val timeParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
     // 7 дней недели
     val weekDays = remember(startOfWeek) {
         List(7) { dayOffset ->
@@ -130,9 +125,9 @@ fun WeekView(
 
                     // 2. Отрисовываем события
                     val dayItems = items.filter { item ->
-                        val startDate = try { timeParser.parse(item.startsAt.take(19)) } catch (e: Exception) { null }
-                        if (startDate != null) {
-                            val itemCal = Calendar.getInstance().apply { time = startDate }
+                        // Используем безопасную функцию парсинга
+                        val itemCal = parseIsoDate(item.startsAt)
+                        if (itemCal != null) {
                             itemCal.get(Calendar.DAY_OF_MONTH) == day.get(Calendar.DAY_OF_MONTH) &&
                                     itemCal.get(Calendar.MONTH) == day.get(Calendar.MONTH) &&
                                     itemCal.get(Calendar.YEAR) == day.get(Calendar.YEAR)
@@ -140,58 +135,85 @@ fun WeekView(
                     }
 
                     dayItems.forEach { item ->
-                        val startCal = Calendar.getInstance().apply { time = timeParser.parse(item.startsAt.take(19))!! }
+                        val startCal = parseIsoDate(item.startsAt)
 
-                        // Если endsAt нет, считаем что событие длится 1 час
-                        val endCal = if (item.endsAt != null) {
-                            Calendar.getInstance().apply { time = timeParser.parse(item.endsAt.take(19))!! }
-                        } else {
-                            (startCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
-                        }
+                        // Если дата распарсилась успешно
+                        if (startCal != null) {
+                            // Если endsAt нет, считаем что событие длится 1 час
+                            val endCal = if (item.endsAt != null) {
+                                parseIsoDate(item.endsAt) ?: (startCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                            } else {
+                                (startCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                            }
 
-                        val startHour = startCal.get(Calendar.HOUR_OF_DAY)
-                        val startMinute = startCal.get(Calendar.MINUTE)
+                            val startHour = startCal.get(Calendar.HOUR_OF_DAY)
+                            val startMinute = startCal.get(Calendar.MINUTE)
 
-                        // Длительность в минутах (минимум 30 минут, чтобы блок был виден)
-                        val durationMinutes = ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60)).toInt().coerceAtLeast(30)
+                            // Длительность в минутах (минимум 30 минут, чтобы блок был виден)
+                            val durationMinutes = ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60)).toInt().coerceAtLeast(30)
 
-                        val minuteHeight = hourHeight / 60f
+                            val minuteHeight = hourHeight / 60f
 
-                        // Вычисляем отступ сверху и высоту блока
-                        val yOffset = (startHour * hourHeight.value) + (startMinute * minuteHeight.value)
-                        val eventHeight = durationMinutes * minuteHeight.value
+                            // Вычисляем отступ сверху и высоту блока
+                            val yOffset = (startHour * hourHeight.value) + (startMinute * minuteHeight.value)
+                            val eventHeight = durationMinutes * minuteHeight.value
 
-                        val isEvent = item.type == "event"
-                        val color = if (isEvent) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
+                            val isEvent = item.type == "event"
+                            val color = if (isEvent) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
 
-                        // Блок события
-                        Box(
-                            modifier = Modifier
-                                .offset(x = 2.dp, y = yOffset.dp)
-                                .fillMaxWidth()
-                                .height(eventHeight.dp)
-                                .padding(end = 2.dp, bottom = 2.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(color)
-                                .clickable {
-                                    if (item.type == "event") {
-                                        onEventClick(item.id)
-                                    } else {
-                                        onTaskClick(item.id) // Если это дедлайн задачи
+                            // Блок события
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 2.dp, y = yOffset.dp)
+                                    .fillMaxWidth()
+                                    .height(eventHeight.dp)
+                                    .padding(end = 2.dp, bottom = 2.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(color)
+                                    .clickable {
+                                        if (item.type == "event") {
+                                            onEventClick(item.id)
+                                        } else {
+                                            onTaskClick(item.id) // Если это дедлайн задачи
+                                        }
                                     }
-                                }
-                                .padding(4.dp)
-                        ) {
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .padding(4.dp)
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+// Функция пробует несколько форматов и не "роняет" приложение, если формат не совпал
+private fun parseIsoDate(isoString: String): Calendar? {
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'"
+    )
+    for (pattern in patterns) {
+        try {
+            val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val date = sdf.parse(isoString)
+            if (date != null) {
+                return Calendar.getInstance().apply { time = date }
+            }
+        } catch (_: Exception) {
+            // Если не получилось - идем к следующему формату
+        }
+    }
+    return null
 }
