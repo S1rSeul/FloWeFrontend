@@ -82,42 +82,69 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             isLoading = true
             errorMessage = null
             try {
-                // Вычисляем начало и конец периода для запроса
-                val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
+                val calendar = if (viewMode == CalendarViewMode.MONTH) {
+                    (currentMonth.clone() as Calendar)
+                } else {
+                    Calendar.getInstance().apply { timeInMillis = selectedDate }
+                }
 
+                calendar.firstDayOfWeek = Calendar.MONDAY
+
+                // 1. Вычисляем НАЧАЛО периода (from)
                 if (viewMode == CalendarViewMode.MONTH) {
                     calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    calendar.set(Calendar.HOUR_OF_DAY, 0)
-                    calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0)
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
+                        calendar.add(Calendar.DAY_OF_MONTH, -1)
+                    }
                 } else {
-                    calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-                    calendar.set(Calendar.HOUR_OF_DAY, 0)
-                    calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0)
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
+                        calendar.add(Calendar.DAY_OF_MONTH, -1)
+                    }
                 }
+
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
 
                 val fromMillis = calendar.timeInMillis
 
-                // Прибавляем месяц или неделю для 'to'
+                // 2. Вычисляем КОНЕЦ периода (to)
                 if (viewMode == CalendarViewMode.MONTH) {
-                    calendar.add(Calendar.MONTH, 1)
+                    // Берем последний день ТЕКУЩЕГО месяца
+                    val lastDayCalendar = (currentMonth.clone() as Calendar).apply {
+                        set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+                    }
+                    // Докручиваем до воскресенья
+                    while (lastDayCalendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+                        lastDayCalendar.add(Calendar.DAY_OF_MONTH, 1)
+                    }
+                    // Ставим время 23:59:59.999
+                    lastDayCalendar.set(Calendar.HOUR_OF_DAY, 23)
+                    lastDayCalendar.set(Calendar.MINUTE, 59)
+                    lastDayCalendar.set(Calendar.SECOND, 59)
+                    lastDayCalendar.set(Calendar.MILLISECOND, 999)
+
+                    calendar.timeInMillis = lastDayCalendar.timeInMillis
                 } else {
-                    calendar.add(Calendar.WEEK_OF_YEAR, 1)
+                    // Для недели просто прибавляем 7 дней
+                    calendar.add(Calendar.DAY_OF_MONTH, 7)
                 }
+
                 val toMillis = calendar.timeInMillis
 
-                // Форматируем даты вручную
-                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+                sdf.timeZone = TimeZone.getTimeZone("UTC")
 
-                val fromStr = sdf.format(java.util.Date(fromMillis))
-                val toStr = sdf.format(java.util.Date(toMillis))
+                val fromStr = sdf.format(Date(fromMillis))
+                val toStr = sdf.format(Date(toMillis))
 
-                Log.d("CalendarVM", "Отправляем запрос: from=$fromStr, to=$toStr")
+                Log.d("CalendarVM", "Запрос видимого диапазона: from=$fromStr, to=$toStr")
 
                 val items = api.getCalendar(from = fromStr, to = toStr)
                 calendarItems = items
+
+                Log.d("CalendarVM", "Получено элементов: ${items.size}")
 
             } catch (e: Exception) {
                 Log.e("CalendarViewModel", "Ошибка загрузки календаря", e)
@@ -153,5 +180,26 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 Log.e("CalendarViewModel", "Ошибка обновления события", e)
             }
         }
+    }
+
+    // Надежный парсер дат (как в TaskMapper)
+    private fun parseIsoToCalendar(isoString: String): Calendar? {
+        val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.S'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        )
+        for (pattern in patterns) {
+            try {
+                val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+                val date = sdf.parse(isoString) ?: continue
+                return Calendar.getInstance().apply { time = date }
+            } catch (_: Exception) { }
+        }
+        return null
     }
 }

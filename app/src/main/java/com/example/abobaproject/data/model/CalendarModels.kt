@@ -5,6 +5,7 @@ data class CalendarItemDto(
     val id: String,
     val type: String,
     val title: String,
+    val description: String? = null,
     val startsAt: String,
     val endsAt: String? = null,
     val isMyPersonal: Boolean = false,

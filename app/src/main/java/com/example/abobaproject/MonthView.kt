@@ -1,110 +1,76 @@
 package com.example.abobaproject
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.abobaproject.data.model.CalendarItemDto
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
-import java.util.TimeZone
 
 @Composable
 fun MonthView(
     currentMonth: Calendar,
     items: List<CalendarItemDto>,
-    onDayClick: (Long) -> Unit // Передает timestamp выбранного дня
+    onDayClick: (Long) -> Unit
 ) {
-    // Получаем первый день месяца и количество дней в нем
-    val calendar = remember(currentMonth) {
-        (currentMonth.clone() as Calendar).apply {
+    val gridDates = remember(currentMonth.timeInMillis) {
+        val dates = mutableListOf<Calendar>()
+        val firstDay = (currentMonth.clone() as Calendar).apply {
             set(Calendar.DAY_OF_MONTH, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }
+        while (firstDay.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
+            firstDay.add(Calendar.DAY_OF_MONTH, -1)
+        }
+        val lastDay = (currentMonth.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+        }
+        while (lastDay.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+            lastDay.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        val iter = firstDay.clone() as Calendar
+        while (iter.timeInMillis <= lastDay.timeInMillis) {
+            dates.add(iter.clone() as Calendar)
+            iter.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        dates
     }
 
-    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-    // Вычисляем сдвиг: какой день недели первый в месяце (1 = Пн, 7 = Вс)
-    // В Calendar воскресенье = 1, понедельник = 2. Нам нужно привести к стандарту Пн-Вс.
-    val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-    val offset = if (firstDayOfWeek == Calendar.SUNDAY) 6 else firstDayOfWeek - 2
-
-    // Парсер для получения дня из строки (например, из "2026-11-09T20:40:11Z" делает "9")
-    val dateParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC") // Бэкенд отдает в UTC
-    }
+    val currentMonthValue = currentMonth.get(Calendar.MONTH)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Заголовки дней недели
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
             val days = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
             days.forEach { day ->
-                Text(
-                    text = day,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Сетка дней
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // 1. Пустые ячейки для сдвига
-            items(offset) {
-                Box(modifier = Modifier.aspectRatio(1f))
-            }
+        LazyVerticalGrid(columns = GridCells.Fixed(7), modifier = Modifier.fillMaxSize()) {
+            items(gridDates, key = { it.timeInMillis }) { date ->
+                val dayNumber = date.get(Calendar.DAY_OF_MONTH)
+                val isCurrentMonth = date.get(Calendar.MONTH) == currentMonthValue
 
-            // 2. Сами дни месяца
-            items(daysInMonth) { index ->
-                val dayNumber = index + 1
-                val dayCalendar = (calendar.clone() as Calendar).apply {
-                    set(Calendar.DAY_OF_MONTH, dayNumber)
-                }
-                val dayMillis = dayCalendar.timeInMillis
-
-                // Ищем задачи/события на этот день
-                val dayItems = items.filter { item ->
-                    val itemDate = item.startsAt.let {
-                        try { dateParser.parse(it.take(19)) } catch (e: Exception) { null }
-                    }
-                    if (itemDate != null) {
-                        val itemCal = Calendar.getInstance().apply { time = itemDate }
-                        itemCal.get(Calendar.DAY_OF_MONTH) == dayNumber &&
-                                itemCal.get(Calendar.MONTH) == calendar.get(Calendar.MONTH) &&
-                                itemCal.get(Calendar.YEAR) == calendar.get(Calendar.YEAR)
-                    } else false
-                }
+                // Берем ВСЕ задачи, которые пересекаются с этим днем (включая многодневные)
+                val dayItems = items.filter { isItemOnDay(it, date) }
 
                 DayCell(
                     dayNumber = dayNumber,
-                    hasItems = dayItems.isNotEmpty(),
-                    isToday = isToday(dayCalendar),
-                    onClick = { onDayClick(dayMillis) }
+                    items = dayItems,
+                    isToday = isToday(date),
+                    isCurrentMonth = isCurrentMonth,
+                    onClick = { onDayClick(date.timeInMillis) }
                 )
             }
         }
@@ -112,37 +78,20 @@ fun MonthView(
 }
 
 @Composable
-fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> Unit) {
-    Box(
+fun DayCell(dayNumber: Int, items: List<CalendarItemDto>, isToday: Boolean, isCurrentMonth: Boolean, onClick: () -> Unit) {
+    CalendarDayPie(
+        dayNumber = dayNumber,
+        items = items,
+        isToday = isToday,
+        isCurrentMonth = isCurrentMonth,
         modifier = Modifier
             .aspectRatio(1f)
-            .padding(4.dp)
-            .clip(CircleShape)
-            .background(if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = dayNumber.toString(),
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-            )
-            // Индикатор (точка), если есть задачи
-            if (hasItems) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 2.dp)
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
-        }
-    }
+            .padding(2.dp)
+            .clickable { onClick() }
+    )
 }
 
 fun isToday(calendar: Calendar): Boolean {
     val today = Calendar.getInstance()
-    return calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
-            calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+    return calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) && calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
 }
