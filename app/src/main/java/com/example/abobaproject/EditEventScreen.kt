@@ -1,7 +1,5 @@
 package com.example.abobaproject
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,17 +12,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.abobaproject.data.model.CalendarItemDto
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditEventScreen(
-    event: CalendarItemDto?, // Передаем само событие для заполнения полей
+    event: CalendarItemDto?,
     onSaveClick: (title: String, description: String, startsAt: Long, endsAt: Long) -> Unit,
     onBackClick: () -> Unit
 ) {
     if (event == null) {
-        Text("Событие не найдено")
+        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Text("Событие не найдено")
+        }
         return
     }
 
@@ -36,14 +37,18 @@ fun EditEventScreen(
     }
 
     var title by remember { mutableStateOf(event.title) }
-    var description by remember { mutableStateOf("") } // В DTO нет description, если он нужен - добавьте
+    var description by remember { mutableStateOf(event.description ?: "") } // Берем описание из DTO
     var startTime by remember { mutableStateOf(parser.parse(event.startsAt.take(19))?.time) }
     var endTime by remember { mutableStateOf(event.endsAt?.let { parser.parse(it.take(19))?.time }) }
+
+    // Валидация
+    var isTitleError by remember { mutableStateOf(false) }
+    var isTimeError by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Редактирование") },
+                title = { Text("Редактирование события") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
@@ -60,32 +65,79 @@ fun EditEventScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Поле Название
             OutlinedTextField(
                 value = title,
-                onValueChange = { title = it },
-                label = { Text("Название события") },
+                onValueChange = { title = it; if (it.isNotBlank()) isTitleError = false },
+                label = { Text("Название события *") },
+                isError = isTitleError,
+                supportingText = if (isTitleError) { { Text("Название не может быть пустым") } } else null,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Text("Начало:")
-            OutlinedButton(onClick = {
-                showEditDateTimePicker(context, startTime) { startTime = it }
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text(startTime?.let { SimpleDateFormat("dd MMMM, HH:mm", Locale("ru")).format(it) } ?: "Выбрать")
+            // Поле Описание
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Описание (необязательно)") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Время начала
+            Text("Время начала:", style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(
+                onClick = {
+                    showEventDateTimePicker(context, startTime) {
+                        startTime = it
+                        isTimeError = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val text = startTime?.let {
+                    SimpleDateFormat("dd MMMM, HH:mm", Locale("ru")).format(it)
+                } ?: "Выбрать время начала"
+                Text(text)
             }
 
-            Text("Конец:")
-            OutlinedButton(onClick = {
-                showEditDateTimePicker(context, endTime) { endTime = it }
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text(endTime?.let { SimpleDateFormat("dd MMMM, HH:mm", Locale("ru")).format(it) } ?: "Выбрать")
+            // Время окончания
+            Text("Время окончания:", style = MaterialTheme.typography.titleSmall)
+            OutlinedButton(
+                onClick = {
+                    showEventDateTimePicker(context, endTime ?: startTime) {
+                        endTime = it
+                        isTimeError = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val text = endTime?.let {
+                    SimpleDateFormat("dd MMMM, HH:mm", Locale("ru")).format(it)
+                } ?: "Выбрать время окончания"
+                Text(text)
+            }
+
+            if (isTimeError) {
+                Text(
+                    text = "Время окончания должно быть позже времени начала",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Кнопка сохранения
             Button(
                 onClick = {
-                    if (title.isNotBlank() && startTime != null && endTime != null && endTime!! > startTime!!) {
+                    if (title.isBlank()) {
+                        isTitleError = true
+                    } else if (startTime == null || endTime == null) {
+                        isTimeError = true // Или можно вывести другой текст ошибки
+                    } else if (endTime!! <= startTime!!) {
+                        isTimeError = true
+                    } else {
                         onSaveClick(title, description, startTime!!, endTime!!)
                     }
                 },
@@ -95,17 +147,4 @@ fun EditEventScreen(
             }
         }
     }
-}
-
-// Копия функции пикера
-fun showEditDateTimePicker(context: android.content.Context, initialMillis: Long?, onDateTimeSelected: (Long) -> Unit) {
-    val calendar = Calendar.getInstance().apply { if (initialMillis != null) timeInMillis = initialMillis }
-    DatePickerDialog(context, { _, y, m, d ->
-        calendar.set(y, m, d)
-        TimePickerDialog(context, { _, h, min ->
-            calendar.set(Calendar.HOUR_OF_DAY, h)
-            calendar.set(Calendar.MINUTE, min)
-            onDateTimeSelected(calendar.timeInMillis)
-        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), true).show()
-    }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
 }
