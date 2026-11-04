@@ -82,46 +82,73 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             isLoading = true
             errorMessage = null
             try {
-                // Вычисляем начало и конец периода для запроса
                 val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
 
                 if (viewMode == CalendarViewMode.MONTH) {
+                    // Устанавливаем на 1-е число месяца
                     calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    calendar.set(Calendar.HOUR_OF_DAY, 0)
-                    calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0)
+                    // Откатываемся до начала первой недели (обычно это понедельник или воскресенье)
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                        calendar.add(Calendar.DAY_OF_MONTH, -1)
+                    }
                 } else {
-                    calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-                    calendar.set(Calendar.HOUR_OF_DAY, 0)
-                    calendar.set(Calendar.MINUTE, 0)
-                    calendar.set(Calendar.SECOND, 0)
+                    // Для недели: откатываемся до начала текущей недели
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                        calendar.add(Calendar.DAY_OF_MONTH, -1)
+                    }
                 }
+
+                // Обнуляем время для точного начала дня
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
 
                 val fromMillis = calendar.timeInMillis
 
-                // Прибавляем месяц или неделю для 'to'
+                // Вычисляем конец периода
                 if (viewMode == CalendarViewMode.MONTH) {
+                    // Переходим на последний день месяца
                     calendar.add(Calendar.MONTH, 1)
+                    calendar.set(Calendar.DAY_OF_MONTH, 1)
+                    // Идем вперед до конца видимой недели
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                        calendar.add(Calendar.DAY_OF_MONTH, 1)
+                    }
                 } else {
-                    calendar.add(Calendar.WEEK_OF_YEAR, 1)
+                    // Для недели: прибавляем 7 дней к началу
+                    calendar.add(Calendar.DAY_OF_MONTH, 7)
                 }
-                val toMillis = calendar.timeInMillis
 
-                // Форматируем даты вручную
-                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                // Отнимаем 1 миллисекунду, чтобы не захватывать следующий день
+                val toMillis = calendar.timeInMillis - 1
 
-                val fromStr = sdf.format(java.util.Date(fromMillis))
-                val toStr = sdf.format(java.util.Date(toMillis))
+                // Форматируем даты (ДОБАВИЛИ .SSS для миллисекунд!)
+                val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+                sdf.timeZone = TimeZone.getTimeZone("UTC")
 
-                Log.d("CalendarVM", "Отправляем запрос: from=$fromStr, to=$toStr")
+                val fromStr = sdf.format(Date(fromMillis))
+                val toStr = sdf.format(Date(toMillis))
+
+                Log.d("CalendarVM", "Запрос видимого диапазона: from=$fromStr, to=$toStr")
 
                 val items = api.getCalendar(from = fromStr, to = toStr)
                 calendarItems = items
 
+                // Логируем, что пришло
+                Log.d("CalendarVM", "Получено элементов: ${items.size}")
+                items.forEach {
+                    Log.d("CalendarVM", "Элемент: type=${it.type}, title=${it.title}, startsAt=${it.startsAt}")
+                }
+
             } catch (e: Exception) {
                 Log.e("CalendarViewModel", "Ошибка загрузки календаря", e)
-                errorMessage = e.message ?: "Ошибка сети"
+                if (e is retrofit2.HttpException) {
+                    val errorBody = e.response()?.errorBody()?.string()
+                    errorMessage = "Ошибка сервера: ${e.code()} $errorBody"
+                } else {
+                    errorMessage = e.message ?: "Ошибка сети"
+                }
             } finally {
                 isLoading = false
             }
