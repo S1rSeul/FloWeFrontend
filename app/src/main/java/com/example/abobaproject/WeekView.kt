@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -15,13 +14,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.abobaproject.data.model.CalendarItemDto
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.TimeZone
 
 @Composable
 fun WeekView(
@@ -69,34 +70,19 @@ fun WeekView(
                 ) {
                     val dayName = SimpleDateFormat("EEE", Locale("ru")).format(day.time)
                     val dayNumber = day.get(Calendar.DAY_OF_MONTH)
+
                     Text(text = dayName, style = MaterialTheme.typography.labelSmall)
-                    Text(text = dayNumber.toString(), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(2.dp))
 
-                    // ДОБАВЛЯЕМ ТОЧКИ В ШАПКУ ДНЯ
-                    val dayItemsHeader = items.filter { item ->
-                        val itemCal = parseIsoDate(item.startsAt)
-                        itemCal?.get(Calendar.DAY_OF_MONTH) == day.get(Calendar.DAY_OF_MONTH) &&
-                                itemCal?.get(Calendar.MONTH) == day.get(Calendar.MONTH) &&
-                                itemCal?.get(Calendar.YEAR) == day.get(Calendar.YEAR)
-                    }
-
-                    if (dayItemsHeader.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.padding(top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            dayItemsHeader.take(3).forEach { item ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(4.dp)
-                                        .clip(CircleShape)
-                                        .background(getCalendarItemDotColor(item))
-                                )
-                            }
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.height(4.dp)) // Чтобы высота не прыгала
-                    }
+                    // Используем "пирог" в шапке
+                    val dayItemsHeader = items.filter { isItemOnDay(it, day) }
+                    CalendarDayPie(
+                        dayNumber = dayNumber,
+                        items = dayItemsHeader,
+                        isToday = isToday(day),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
         }
@@ -151,81 +137,115 @@ fun WeekView(
                     }
 
                     // 2. Отрисовываем события
-                    val dayItems = items.filter { item ->
-                        // Используем безопасную функцию парсинга
-                        val itemCal = parseIsoDate(item.startsAt)
-                        if (itemCal != null) {
-                            itemCal.get(Calendar.DAY_OF_MONTH) == day.get(Calendar.DAY_OF_MONTH) &&
-                                    itemCal.get(Calendar.MONTH) == day.get(Calendar.MONTH) &&
-                                    itemCal.get(Calendar.YEAR) == day.get(Calendar.YEAR)
-                        } else false
-                    }
+                    val dayItems = items.filter { isItemOnDay(it, day) }
 
                     dayItems.forEach { item ->
                         val originalStartCal = parseIsoDate(item.startsAt)
+                        val originalEndCal = if (item.endsAt != null) parseIsoDate(item.endsAt) else null
 
                         if (originalStartCal != null) {
-                            // новая логика вычисления времени блока
-                            val startCal: Calendar
-                            val endCal: Calendar
+                            var startCal: Calendar
+                            var endCal: Calendar
 
+                            // Логика для задач (дедлайн - 1 час) и событий
                             if (item.type == "task_deadline") {
-                                // Для задачи дедлайн — это КОНЕЦ блока.
-                                // Значит, начинаем блок за 1 час до дедлайна.
                                 endCal = originalStartCal
-                                startCal = (originalStartCal.clone() as Calendar).apply {
-                                    add(Calendar.HOUR_OF_DAY, -1)
-                                }
+                                startCal = (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, -1) }
                             } else {
-                                // Для события: начало в startsAt, конец в endsAt (или +1 час)
                                 startCal = originalStartCal
-                                endCal = if (item.endsAt != null) {
-                                    parseIsoDate(item.endsAt) ?: (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
-                                } else {
-                                    (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
-                                }
+                                endCal = originalEndCal ?: (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
                             }
 
-                            val startHour = startCal.get(Calendar.HOUR_OF_DAY)
-                            val startMinute = startCal.get(Calendar.MINUTE)
+                            // ОБРЕЗАЕМ БЛОК ПО ГРАНИЦАМ ТЕКУЩЕГО ДНЯ
+                            val dayStart = (day.clone() as Calendar).apply {
+                                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                            }
+                            val dayEnd = (dayStart.clone() as Calendar).apply {
+                                add(Calendar.DAY_OF_MONTH, 1)
+                                add(Calendar.MILLISECOND, -1)
+                            }
 
-                            // Длительность в минутах (минимум 30 минут, чтобы блок был виден)
-                            val durationMinutes = ((endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60)).toInt().coerceAtLeast(30)
+                            // Ищем пересечение времени события с текущим днем
+                            val renderStartMillis = maxOf(startCal.timeInMillis, dayStart.timeInMillis)
+                            val renderEndMillis = minOf(endCal.timeInMillis, dayEnd.timeInMillis)
 
-                            val minuteHeight = hourHeight / 60f
+                            // Если блок валиден (начало раньше конца)
+                            if (renderStartMillis < renderEndMillis) {
+                                val renderStartCal = Calendar.getInstance().apply { timeInMillis = renderStartMillis }
+                                val renderEndCal = Calendar.getInstance().apply { timeInMillis = renderEndMillis }
 
-                            // Вычисляем отступ сверху и высоту блока
-                            val yOffset = (startHour * hourHeight.value) + (startMinute * minuteHeight.value)
-                            val eventHeight = durationMinutes * minuteHeight.value
+                                val startHour = renderStartCal.get(Calendar.HOUR_OF_DAY)
+                                val startMinute = renderStartCal.get(Calendar.MINUTE)
 
-                            val bgColor = getCalendarItemContainerColor(item)
-                            val txtColor = getCalendarItemTextColor(item)
+                                // Длительность в минутах (минимум 15 минут)
+                                val durationMinutes = ((renderEndMillis - renderStartMillis) / (1000 * 60)).toInt().coerceAtLeast(15)
+                                val minuteHeight = hourHeight / 60f
 
-                            // Блок события
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = 2.dp, y = yOffset.dp)
-                                    .fillMaxWidth()
-                                    .height(eventHeight.dp)
-                                    .padding(end = 2.dp, bottom = 2.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(bgColor)
-                                    .clickable {
-                                        if (item.type == "event") {
-                                            onEventClick(item.id)
-                                        } else {
-                                            onTaskClick(item.id) // Если это дедлайн задачи
+                                // Вычисляем отступ сверху и высоту блока (в Float, которые потом станут Dp)
+                                val yOffset = (startHour * hourHeight.value) + (startMinute * minuteHeight.value)
+                                val eventHeight = durationMinutes * minuteHeight.value
+
+                                val bgColor = getCalendarItemContainerColor(item)
+                                val txtColor = getCalendarItemTextColor(item)
+
+                                // Блок события
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = 2.dp, y = yOffset.dp)
+                                        .fillMaxWidth()
+                                        .height(eventHeight.dp)
+                                        .padding(end = 2.dp, bottom = 2.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(bgColor)
+                                        .clickable {
+                                            if (item.type == "event") {
+                                                onEventClick(item.id)
+                                            } else {
+                                                onTaskClick(item.id)
+                                            }
+                                        }
+                                        .zIndex(1f)
+                                ) {
+                                    val density = LocalDensity.current
+                                    val scrollOffsetPx = scrollState.value
+                                    val eventTopPx = with(density) { yOffset.dp.toPx() }
+
+                                    // Вычисляем сдвиг, если мы прокрутили дальше начала блока
+                                    val stickOffset = if (scrollOffsetPx > eventTopPx) {
+                                        val shiftPx = scrollOffsetPx - eventTopPx
+                                        // Ограничиваем сдвиг, чтобы текст не улетел за нижнюю границу блока
+                                        val maxShiftPx = with(density) { (eventHeight - 40f).dp.toPx() }.coerceAtLeast(0f)
+                                        with(density) { shiftPx.coerceAtMost(maxShiftPx).toDp() }
+                                    } else {
+                                        0.dp
+                                    }
+
+                                    Column(
+                                        modifier = Modifier
+                                            // Применяем динамический сдвиг к тексту
+                                            .offset(y = stickOffset)
+                                            .padding(4.dp)
+                                    ) {
+                                        // Название задачи/события
+                                        Text(
+                                            text = item.title,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                            color = txtColor,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        // Время
+                                        if (eventHeight > 40f) {
+                                            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+                                            Text(
+                                                text = "${timeFormat.format(renderStartCal.time)} - ${timeFormat.format(renderEndCal.time)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = txtColor.copy(alpha = 0.8f)
+                                            )
                                         }
                                     }
-                                    .padding(4.dp)
-                            ) {
-                                Text(
-                                    text = item.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = txtColor, // Новый цвет текста
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                }
                             }
                         }
                     }

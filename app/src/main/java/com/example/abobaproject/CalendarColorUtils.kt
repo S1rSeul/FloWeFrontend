@@ -38,9 +38,9 @@ fun getCalendarItemDotColor(item: CalendarItemDto): Color {
 @Composable
 fun getCalendarItemTextColor(item: CalendarItemDto): Color {
     return when {
-        item.type == "event" -> EventBlue
-        item.isOverdue -> OverdueRed
-        item.status == "done" -> DoneGreen
-        else -> ActiveYellow
+        item.type == "event" -> DarkText
+        item.isOverdue -> DarkText
+        item.status == "done" -> DarkText
+        else -> DarkText
     }
 }
