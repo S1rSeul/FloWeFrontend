@@ -30,22 +30,44 @@ fun MonthView(
     items: List<CalendarItemDto>,
     onDayClick: (Long) -> Unit
 ) {
-    // Получаем первый день месяца и количество дней
-    val calendar = remember(currentMonth.timeInMillis) {
-        (currentMonth.clone() as Calendar).apply {
+    // 1. Вычисляем ПОЛНЫЙ видимый диапазон (с понедельника первой недели по воскресенье последней)
+    val gridDates = remember(currentMonth.timeInMillis) {
+        val dates = mutableListOf<Calendar>()
+
+        // Находим первый день месяца
+        val firstDay = (currentMonth.clone() as Calendar).apply {
             set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
+
+        // Откатываемся назад до понедельника
+        while (firstDay.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
+            firstDay.add(Calendar.DAY_OF_MONTH, -1)
+        }
+
+        // Находим последний день месяца
+        val lastDay = (currentMonth.clone() as Calendar).apply {
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+        }
+
+        // Идем вперед до воскресенья
+        while (lastDay.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+            lastDay.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        // Заполняем список дат
+        val iter = firstDay.clone() as Calendar
+        while (iter.timeInMillis <= lastDay.timeInMillis) {
+            dates.add(iter.clone() as Calendar)
+            iter.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        dates
     }
 
-    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
-    val offset = if (firstDayOfWeek == Calendar.SUNDAY) 6 else firstDayOfWeek - 2
-
-    // ОПТИМИЗАЦИЯ: Группируем события по дням ОДИН раз при изменении списка items
+    // Группируем события по дням
     val itemsByDay = remember(items) {
         val map = mutableMapOf<String, List<CalendarItemDto>>()
         val dateParser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
@@ -54,11 +76,9 @@ fun MonthView(
 
         items.forEach { item ->
             try {
-                // Берем первые 19 символов для парсинга (yyyy-MM-dd'T'HH:mm:ss)
                 val date = dateParser.parse(item.startsAt.take(19))
                 if (date != null) {
                     val itemCal = Calendar.getInstance().apply { time = date }
-                    // Ключ формата "yyyy-MM-dd" (например, "2026-11-15")
                     val key = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(itemCal.time)
                     map[key] = map.getOrDefault(key, emptyList()) + item
                 }
@@ -66,6 +86,8 @@ fun MonthView(
         }
         map
     }
+
+    val currentMonthValue = currentMonth.get(Calendar.MONTH)
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Заголовки дней недели
@@ -84,31 +106,24 @@ fun MonthView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Отрисовываем сплошную сетку
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             modifier = Modifier.fillMaxSize()
         ) {
-            // 1. Пустые ячейки для сдвига
-            items(offset) {
-                Box(modifier = Modifier.aspectRatio(1f))
-            }
+            items(gridDates) { date ->
+                val dayNumber = date.get(Calendar.DAY_OF_MONTH)
+                val isCurrentMonth = date.get(Calendar.MONTH) == currentMonthValue
 
-            // 2. Сами дни месяца
-            items(daysInMonth) { index ->
-                val dayNumber = index + 1
-                val dayCalendar = (calendar.clone() as Calendar).apply {
-                    set(Calendar.DAY_OF_MONTH, dayNumber)
-                }
-
-                // Формируем ключ для быстрого поиска (например, "2026-11-01")
-                val dayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dayCalendar.time)
+                val dayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(date.time)
                 val dayItems = itemsByDay[dayKey] ?: emptyList()
 
                 DayCell(
                     dayNumber = dayNumber,
                     hasItems = dayItems.isNotEmpty(),
-                    isToday = isToday(dayCalendar),
-                    onClick = { onDayClick(dayCalendar.timeInMillis) }
+                    isToday = isToday(date),
+                    isCurrentMonth = isCurrentMonth, // 👈 Передаем флаг "своего" месяца
+                    onClick = { onDayClick(date.timeInMillis) }
                 )
             }
         }
@@ -116,7 +131,20 @@ fun MonthView(
 }
 
 @Composable
-fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> Unit) {
+fun DayCell(
+    dayNumber: Int,
+    hasItems: Boolean,
+    isToday: Boolean,
+    isCurrentMonth: Boolean, // 👈 Новый параметр
+    onClick: () -> Unit
+) {
+    // Если день не из текущего месяца - делаем его блеклым
+    val textColor = when {
+        isToday -> MaterialTheme.colorScheme.onPrimaryContainer
+        !isCurrentMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -130,7 +158,7 @@ fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> 
             Text(
                 text = dayNumber.toString(),
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                color = textColor
             )
             if (hasItems) {
                 Box(
@@ -138,7 +166,11 @@ fun DayCell(dayNumber: Int, hasItems: Boolean, isToday: Boolean, onClick: () -> 
                         .padding(top = 2.dp)
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(
+                            // Точку тоже делаем блеклой для чужого месяца
+                            if (isCurrentMonth) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        )
                 )
             }
         }

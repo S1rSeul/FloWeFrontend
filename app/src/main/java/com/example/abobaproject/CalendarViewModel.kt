@@ -84,16 +84,19 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             try {
                 val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
 
+                // 1. Фиксируем понедельник как первый день недели
+                calendar.firstDayOfWeek = Calendar.MONDAY
+
                 if (viewMode == CalendarViewMode.MONTH) {
                     // Устанавливаем на 1-е число месяца
                     calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    // Откатываемся до начала первой недели (обычно это понедельник или воскресенье)
-                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                    // Откатываемся назад до понедельника
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
                         calendar.add(Calendar.DAY_OF_MONTH, -1)
                     }
                 } else {
-                    // Для недели: откатываемся до начала текущей недели
-                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                    // Для недели: откатываемся до начала текущей недели (понедельника)
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
                         calendar.add(Calendar.DAY_OF_MONTH, -1)
                     }
                 }
@@ -108,11 +111,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
                 // Вычисляем конец периода
                 if (viewMode == CalendarViewMode.MONTH) {
-                    // Переходим на последний день месяца
+                    // Переходим на следующий месяц
                     calendar.add(Calendar.MONTH, 1)
                     calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    // Идем вперед до конца видимой недели
-                    while (calendar.get(Calendar.DAY_OF_WEEK) != calendar.firstDayOfWeek) {
+                    // Идем вперед до ближайшего понедельника (конец видимой сетки)
+                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
                         calendar.add(Calendar.DAY_OF_MONTH, 1)
                     }
                 } else {
@@ -123,7 +126,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 // Отнимаем 1 миллисекунду, чтобы не захватывать следующий день
                 val toMillis = calendar.timeInMillis - 1
 
-                // Форматируем даты (ДОБАВИЛИ .SSS для миллисекунд!)
+                // Форматируем даты для отправки на сервер
                 val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
                 sdf.timeZone = TimeZone.getTimeZone("UTC")
 
@@ -135,7 +138,6 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 val items = api.getCalendar(from = fromStr, to = toStr)
                 calendarItems = items
 
-                // Логируем, что пришло
                 Log.d("CalendarVM", "Получено элементов: ${items.size}")
                 items.forEach {
                     Log.d("CalendarVM", "Элемент: type=${it.type}, title=${it.title}, startsAt=${it.startsAt}")
