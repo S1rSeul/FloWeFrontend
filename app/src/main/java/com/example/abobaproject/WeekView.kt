@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +71,32 @@ fun WeekView(
                     val dayNumber = day.get(Calendar.DAY_OF_MONTH)
                     Text(text = dayName, style = MaterialTheme.typography.labelSmall)
                     Text(text = dayNumber.toString(), style = MaterialTheme.typography.titleMedium)
+
+                    // ДОБАВЛЯЕМ ТОЧКИ В ШАПКУ ДНЯ
+                    val dayItemsHeader = items.filter { item ->
+                        val itemCal = parseIsoDate(item.startsAt)
+                        itemCal?.get(Calendar.DAY_OF_MONTH) == day.get(Calendar.DAY_OF_MONTH) &&
+                                itemCal?.get(Calendar.MONTH) == day.get(Calendar.MONTH) &&
+                                itemCal?.get(Calendar.YEAR) == day.get(Calendar.YEAR)
+                    }
+
+                    if (dayItemsHeader.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            dayItemsHeader.take(3).forEach { item ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(getCalendarItemDotColor(item))
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp)) // Чтобы высота не прыгала
+                    }
                 }
             }
         }
@@ -135,15 +162,28 @@ fun WeekView(
                     }
 
                     dayItems.forEach { item ->
-                        val startCal = parseIsoDate(item.startsAt)
+                        val originalStartCal = parseIsoDate(item.startsAt)
 
-                        // Если дата распарсилась успешно
-                        if (startCal != null) {
-                            // Если endsAt нет, считаем что событие длится 1 час
-                            val endCal = if (item.endsAt != null) {
-                                parseIsoDate(item.endsAt) ?: (startCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                        if (originalStartCal != null) {
+                            // новая логика вычисления времени блока
+                            val startCal: Calendar
+                            val endCal: Calendar
+
+                            if (item.type == "task_deadline") {
+                                // Для задачи дедлайн — это КОНЕЦ блока.
+                                // Значит, начинаем блок за 1 час до дедлайна.
+                                endCal = originalStartCal
+                                startCal = (originalStartCal.clone() as Calendar).apply {
+                                    add(Calendar.HOUR_OF_DAY, -1)
+                                }
                             } else {
-                                (startCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                                // Для события: начало в startsAt, конец в endsAt (или +1 час)
+                                startCal = originalStartCal
+                                endCal = if (item.endsAt != null) {
+                                    parseIsoDate(item.endsAt) ?: (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                                } else {
+                                    (originalStartCal.clone() as Calendar).apply { add(Calendar.HOUR_OF_DAY, 1) }
+                                }
                             }
 
                             val startHour = startCal.get(Calendar.HOUR_OF_DAY)
@@ -158,8 +198,8 @@ fun WeekView(
                             val yOffset = (startHour * hourHeight.value) + (startMinute * minuteHeight.value)
                             val eventHeight = durationMinutes * minuteHeight.value
 
-                            val isEvent = item.type == "event"
-                            val color = if (isEvent) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
+                            val bgColor = getCalendarItemContainerColor(item)
+                            val txtColor = getCalendarItemTextColor(item)
 
                             // Блок события
                             Box(
@@ -169,7 +209,7 @@ fun WeekView(
                                     .height(eventHeight.dp)
                                     .padding(end = 2.dp, bottom = 2.dp)
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(color)
+                                    .background(bgColor)
                                     .clickable {
                                         if (item.type == "event") {
                                             onEventClick(item.id)
@@ -182,6 +222,7 @@ fun WeekView(
                                 Text(
                                     text = item.title,
                                     style = MaterialTheme.typography.bodySmall,
+                                    color = txtColor, // Новый цвет текста
                                     maxLines = 3,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -192,28 +233,4 @@ fun WeekView(
             }
         }
     }
-}
-
-// Функция пробует несколько форматов и не "роняет" приложение, если формат не совпал
-private fun parseIsoDate(isoString: String): Calendar? {
-    val patterns = listOf(
-        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss.SS'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss'Z'"
-    )
-    for (pattern in patterns) {
-        try {
-            val sdf = SimpleDateFormat(pattern, Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-            val date = sdf.parse(isoString)
-            if (date != null) {
-                return Calendar.getInstance().apply { time = date }
-            }
-        } catch (_: Exception) {
-            // Если не получилось - идем к следующему формату
-        }
-    }
-    return null
 }

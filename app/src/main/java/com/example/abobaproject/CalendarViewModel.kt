@@ -82,26 +82,26 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             isLoading = true
             errorMessage = null
             try {
-                val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
+                val calendar = if (viewMode == CalendarViewMode.MONTH) {
+                    (currentMonth.clone() as Calendar)
+                } else {
+                    Calendar.getInstance().apply { timeInMillis = selectedDate }
+                }
 
-                // 1. Фиксируем понедельник как первый день недели
                 calendar.firstDayOfWeek = Calendar.MONDAY
 
+                // 1. Вычисляем НАЧАЛО периода (from)
                 if (viewMode == CalendarViewMode.MONTH) {
-                    // Устанавливаем на 1-е число месяца
                     calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    // Откатываемся назад до понедельника
                     while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
                         calendar.add(Calendar.DAY_OF_MONTH, -1)
                     }
                 } else {
-                    // Для недели: откатываемся до начала текущей недели (понедельника)
                     while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
                         calendar.add(Calendar.DAY_OF_MONTH, -1)
                     }
                 }
 
-                // Обнуляем время для точного начала дня
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
                 calendar.set(Calendar.MINUTE, 0)
                 calendar.set(Calendar.SECOND, 0)
@@ -109,24 +109,30 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
                 val fromMillis = calendar.timeInMillis
 
-                // Вычисляем конец периода
+                // 2. Вычисляем КОНЕЦ периода (to)
                 if (viewMode == CalendarViewMode.MONTH) {
-                    // Переходим на следующий месяц
-                    calendar.add(Calendar.MONTH, 1)
-                    calendar.set(Calendar.DAY_OF_MONTH, 1)
-                    // Идем вперед до ближайшего понедельника (конец видимой сетки)
-                    while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) {
-                        calendar.add(Calendar.DAY_OF_MONTH, 1)
+                    // Берем последний день ТЕКУЩЕГО месяца
+                    val lastDayCalendar = (currentMonth.clone() as Calendar).apply {
+                        set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
                     }
+                    // Докручиваем до воскресенья
+                    while (lastDayCalendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+                        lastDayCalendar.add(Calendar.DAY_OF_MONTH, 1)
+                    }
+                    // Ставим время 23:59:59.999
+                    lastDayCalendar.set(Calendar.HOUR_OF_DAY, 23)
+                    lastDayCalendar.set(Calendar.MINUTE, 59)
+                    lastDayCalendar.set(Calendar.SECOND, 59)
+                    lastDayCalendar.set(Calendar.MILLISECOND, 999)
+
+                    calendar.timeInMillis = lastDayCalendar.timeInMillis
                 } else {
-                    // Для недели: прибавляем 7 дней к началу
+                    // Для недели просто прибавляем 7 дней
                     calendar.add(Calendar.DAY_OF_MONTH, 7)
                 }
 
-                // Отнимаем 1 миллисекунду, чтобы не захватывать следующий день
-                val toMillis = calendar.timeInMillis - 1
+                val toMillis = calendar.timeInMillis
 
-                // Форматируем даты для отправки на сервер
                 val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
                 sdf.timeZone = TimeZone.getTimeZone("UTC")
 
@@ -139,18 +145,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                 calendarItems = items
 
                 Log.d("CalendarVM", "Получено элементов: ${items.size}")
-                items.forEach {
-                    Log.d("CalendarVM", "Элемент: type=${it.type}, title=${it.title}, startsAt=${it.startsAt}")
-                }
 
             } catch (e: Exception) {
                 Log.e("CalendarViewModel", "Ошибка загрузки календаря", e)
-                if (e is retrofit2.HttpException) {
-                    val errorBody = e.response()?.errorBody()?.string()
-                    errorMessage = "Ошибка сервера: ${e.code()} $errorBody"
-                } else {
-                    errorMessage = e.message ?: "Ошибка сети"
-                }
+                errorMessage = e.message ?: "Ошибка сети"
             } finally {
                 isLoading = false
             }

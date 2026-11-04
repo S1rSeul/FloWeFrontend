@@ -1,6 +1,10 @@
 package com.example.abobaproject
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -11,6 +15,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Calendar
@@ -24,6 +34,8 @@ fun CalendarScreen(
     onCreateEventClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    var isLegendVisible by remember { mutableStateOf(true) }
+
     LaunchedEffect(viewModel.selectedDate, viewModel.viewMode) {
         viewModel.loadCalendarData()
     }
@@ -91,6 +103,29 @@ fun CalendarScreen(
             FloatingActionButton(onClick = onCreateEventClick) {
                 Icon(Icons.Default.Add, contentDescription = "Новое событие")
             }
+        },
+        bottomBar = {
+            Surface(shadowElevation = 8.dp) {
+                Column {
+                    // Кнопка-переключатель
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { isLegendVisible = !isLegendVisible }.padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (isLegendVisible) "Скрыть" else "Показать", style = MaterialTheme.typography.labelSmall)
+                        Icon(
+                            imageVector = if (isLegendVisible) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Свернуть/Развернуть"
+                        )
+                    }
+
+                    // Сама легенда
+                    if (isLegendVisible) {
+                        CalendarLegend()
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -111,7 +146,7 @@ fun CalendarScreen(
                     MonthView(
                         currentMonth = viewModel.currentMonth,
                         items = viewModel.calendarItems,
-                        onDayClick = { /* Пока оставляем пустым */ }
+                        onDayClick = { /* TODO: Пока оставляем пустым */ }
                     )
                 } else {
                     WeekView(
@@ -123,5 +158,39 @@ fun CalendarScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CalendarLegend() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, bottom = 12.dp, end = 80.dp), // Отступ справа для FAB
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendItem(color = EventBlue, label = "Событие")
+        LegendItem(color = ActiveYellow, label = "Задача")
+        LegendItem(color = OverdueRed, label = "Просрочено")
+        LegendItem(color = DoneGreen, label = "Выполнено")
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
