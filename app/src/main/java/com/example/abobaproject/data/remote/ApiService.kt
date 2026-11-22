@@ -110,4 +110,31 @@ interface ApiService {
         @Query("from") from: String,
         @Query("to") to: String
     ): ExpenseSummaryResponse
+
+    // --- M-01 & M-05: Расходы ---
+    @GET("expenses")
+    suspend fun getExpenses(
+        @Query("category") category: String? = null,
+        @Query("payer") payer: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null
+    ): List<ExpenseResponse>
+
+    @POST("expenses")
+    suspend fun createExpense(@Body request: CreateExpenseRequest): ExpenseResponse
+
+    @DELETE("expenses/{id}")
+    suspend fun deleteExpense(@Path("id") id: String): Response<Unit>
+
+    // --- M-04: Бюджеты ---
+    @GET("budgets")
+    suspend fun getBudgets(): List<BudgetResponse>
+
+    @POST("budgets")
+    suspend fun setBudget(@Body request: SetBudgetRequest): BudgetResponse
+
+    @DELETE("budgets/{id}")
+    suspend fun deleteBudget(@Path("id") id: String): Response<Unit>
 }

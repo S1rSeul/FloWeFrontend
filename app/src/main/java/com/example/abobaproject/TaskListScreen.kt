@@ -1,7 +1,6 @@
 package com.example.abobaproject
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,13 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -29,7 +29,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,9 +40,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.abobaproject.ui.components.StatusIndicator
 import com.example.abobaproject.ui.components.TaskItem
-
-import androidx.compose.material.icons.filled.Savings // TODO: temp
-import androidx.compose.material.icons.filled.PieChart // TODO: temp
 
 enum class TaskFilter(val label: String) {
     ALL("Все"),
@@ -60,8 +56,10 @@ fun TaskListScreen(
     onTaskClick: (String) -> Unit,
     onLogoutClick: () -> Unit,
     onCalendarClick: () -> Unit,
-    onSavingsClick: () -> Unit,    // TODO: temp
-    onSummaryClick: () -> Unit,    // TODO: temp
+    onSavingsClick: () -> Unit,
+    onSummaryClick: () -> Unit,
+    onExpensesClick: () -> Unit = {},
+    onBudgetsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
@@ -98,26 +96,24 @@ fun TaskListScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                //horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Задачи FloWe",
                     style = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
-                    maxLines = 1 // Запрещаем переносить текст на новую строку
+                    maxLines = 1
                 )
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(0.dp) // Убираем лишние отступы между кнопками
+                    horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    // AND-19 Индикатор состояния
                     StatusIndicator(
                         isOnline = taskViewModel.isPartnerOnline,
                         onClick = { taskViewModel.togglePartnerStatus() }
                     )
-                    // TODO: temp  Переход к накопительным счетам
+
                     IconButton(onClick = onSavingsClick) {
                         Icon(
                             imageVector = Icons.Default.Savings,
@@ -125,7 +121,20 @@ fun TaskListScreen(
                         )
                     }
 
-                    // TODO: temp  Переход к Сводке (Главному экрану)
+                    IconButton(onClick = onExpensesClick) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = "История расходов"
+                        )
+                    }
+
+                    IconButton(onClick = onBudgetsClick) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalanceWallet,
+                            contentDescription = "Бюджеты"
+                        )
+                    }
+
                     IconButton(onClick = onSummaryClick) {
                         Icon(
                             imageVector = Icons.Default.PieChart,
@@ -133,7 +142,6 @@ fun TaskListScreen(
                         )
                     }
 
-                    // Кнопка перехода в Календарь
                     IconButton(onClick = onCalendarClick) {
                         Icon(
                             imageVector = Icons.Default.DateRange,
@@ -141,7 +149,6 @@ fun TaskListScreen(
                         )
                     }
 
-                    // Кнопка выхода из аккаунта
                     IconButton(onClick = onLogoutClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ExitToApp,
@@ -153,7 +160,6 @@ fun TaskListScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Фильтры списка задач
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(TaskFilter.entries) { filter ->
                     FilterChip(
@@ -166,88 +172,39 @@ fun TaskListScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // AND-34: Визуальные состояния
-            PullToRefreshBox(
-                isRefreshing = taskViewModel.isLoading,
-                onRefresh = { taskViewModel.refresh() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f) // Занимает всё оставшееся место
-            ) {
-                when {
-                    // Загрузка (только когда список пустой)
-                    taskViewModel.isLoading && taskViewModel.tasks.isEmpty() -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-
-                    // Ошибка сети/сервера
-                    taskViewModel.errorMessage != null -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState()) // Чтобы свайп работал
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "Ошибка: ${taskViewModel.errorMessage}",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = {
-                                taskViewModel.clearError()
-                                taskViewModel.refresh()
-                            }) {
-                                Text("Повторить")
-                            }
-                        }
-                    }
-
-                    // Пусто
-                    filteredTasks.isEmpty() -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState()) // Чтобы свайп работал
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "Задач пока нет",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Потяните вниз для обновления или нажмите +",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    }
-
-                    // Список задач
-                    else -> {
-                        LazyColumn(
-                            contentPadding = PaddingValues(bottom = 80.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            items(filteredTasks, key = { it.id }) { task ->
-                                TaskItem(
-                                    task = task,
-                                    onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
-                                    onClick = { onTaskClick(task.id) }
-                                )
-                            }
-                        }
+            if (taskViewModel.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else if (filteredTasks.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Задач пока нет",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Нажмите +, чтобы добавить первую задачу",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filteredTasks, key = { it.id }) { task ->
+                        TaskItem(
+                            task = task,
+                            onToggleCompleted = { taskViewModel.toggleTaskCompleted(task.id) },
+                            onClick = { onTaskClick(task.id) }
+                        )
                     }
                 }
             }

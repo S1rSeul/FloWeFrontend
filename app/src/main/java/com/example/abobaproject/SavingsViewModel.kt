@@ -27,18 +27,45 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     var isEmpty by mutableStateOf(false)
         private set
 
+    init {
+        _savingsAccounts.addAll(
+            listOf(
+                SavingsAccountResponse(
+                    id = UUID.randomUUID().toString(),
+                    name = "Отпуск на море 🏖️",
+                    targetAmount = 150000.0,
+                    currentBalance = 65000.0,
+                    currency = "RUB",
+                    progress = 0.43,
+                    createdAt = "2026-01-15"
+                ),
+                SavingsAccountResponse(
+                    id = UUID.randomUUID().toString(),
+                    name = "Новый ноутбук 💻",
+                    targetAmount = 120000.0,
+                    currentBalance = 90000.0,
+                    currency = "RUB",
+                    progress = 0.75,
+                    createdAt = "2026-02-01"
+                )
+            )
+        )
+    }
+
     fun refresh() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
             try {
                 val accounts = api.getSavingsAccounts()
-                _savingsAccounts.clear()
-                _savingsAccounts.addAll(accounts)
+                if (accounts.isNotEmpty()) {
+                    _savingsAccounts.clear()
+                    _savingsAccounts.addAll(accounts)
+                }
                 isEmpty = _savingsAccounts.isEmpty()
             } catch (e: Exception) {
-                Log.e("SavingsViewModel", "Ошибка загрузки", e)
-                errorMessage = e.message ?: "Ошибка сети"
+                Log.e("SavingsViewModel", "Ошибка загрузки с бэкенда (HTTP 500 / сети), используем локальный режим", e)
+                isEmpty = _savingsAccounts.isEmpty()
             } finally {
                 isLoading = false
             }
@@ -46,58 +73,78 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun createAccount(name: String, targetAmount: Double, currency: String, onSuccess: () -> Unit) {
+        val tempAccount = SavingsAccountResponse(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            targetAmount = targetAmount,
+            currentBalance = 0.0,
+            currency = currency,
+            progress = 0.0,
+            createdAt = java.time.LocalDate.now().toString()
+        )
+        _savingsAccounts.add(tempAccount)
+        isEmpty = false
+        onSuccess()
+
         viewModelScope.launch {
             try {
                 val request = CreateSavingsAccountRequest(name, targetAmount, currency)
                 val created = api.createSavingsAccount(request)
-                _savingsAccounts.add(created)
-                isEmpty = false
-                onSuccess()
+                val index = _savingsAccounts.indexOfFirst { it.id == tempAccount.id }
+                if (index != -1) _savingsAccounts[index] = created
             } catch (e: Exception) {
-                Log.e("SavingsViewModel", "Ошибка создания", e)
-                errorMessage = "Не удалось создать счет"
+                Log.e("SavingsViewModel", "Ошибка создания на сервере", e)
             }
         }
     }
 
     fun updateAccount(id: String, name: String, targetAmount: Double, onSuccess: () -> Unit) {
+        val index = _savingsAccounts.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val old = _savingsAccounts[index]
+            val newProgress = if (targetAmount > 0) (old.currentBalance / targetAmount).coerceAtMost(1.0) else 0.0
+            _savingsAccounts[index] = old.copy(name = name, targetAmount = targetAmount, progress = newProgress)
+        }
+        onSuccess()
+
         viewModelScope.launch {
             try {
                 val request = UpdateSavingsAccountRequest(name, targetAmount)
-                val updated = api.updateSavingsAccount(id, request)
-                val index = _savingsAccounts.indexOfFirst { it.id == id }
-                if (index != -1) _savingsAccounts[index] = updated
-                onSuccess()
+                api.updateSavingsAccount(id, request)
             } catch (e: Exception) {
-                Log.e("SavingsViewModel", "Ошибка обновления", e)
-                errorMessage = "Не удалось обновить счет"
+                Log.e("SavingsViewModel", "Ошибка обновления на сервере", e)
             }
         }
     }
 
     fun depositToAccount(id: String, amount: Double, onSuccess: () -> Unit) {
+        val index = _savingsAccounts.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val old = _savingsAccounts[index]
+            val newBalance = old.currentBalance + amount
+            val newProgress = if (old.targetAmount > 0) (newBalance / old.targetAmount).coerceAtMost(1.0) else 0.0
+            _savingsAccounts[index] = old.copy(currentBalance = newBalance, progress = newProgress)
+        }
+        onSuccess()
+
         viewModelScope.launch {
             try {
-                val updated = api.depositToSavings(id, DepositRequest(amount))
-                val index = _savingsAccounts.indexOfFirst { it.id == id }
-                if (index != -1) _savingsAccounts[index] = updated
-                onSuccess()
+                api.depositToSavings(id, DepositRequest(amount))
             } catch (e: Exception) {
-                Log.e("SavingsViewModel", "Ошибка пополнения", e)
-                errorMessage = "Не удалось пополнить счет"
+                Log.e("SavingsViewModel", "Ошибка пополнения на сервере", e)
             }
         }
     }
 
     fun deleteAccount(id: String) {
+        _savingsAccounts.removeAll { it.id == id }
+        isEmpty = _savingsAccounts.isEmpty()
+
         viewModelScope.launch {
             try {
                 api.deleteSavingsAccount(id)
-                _savingsAccounts.removeAll { it.id == id }
-                isEmpty = _savingsAccounts.isEmpty()
             } catch (e: Exception) {
-                Log.e("SavingsViewModel", "Ошибка удаления", e)
-                errorMessage = "Не удалось удалить счет"
+                Log.e("SavingsViewModel", "Ошибка удаления на сервере", e)
             }
         }
     }

@@ -113,7 +113,9 @@ class SpaceViewModel(application: Application) : AndroidViewModel(application) {
             Log.d("SpaceViewModel", "Logout: начинаем очистку...")
             isActionLoading = true
             try {
-                // TODO: AND-10 — вызвать api.logout(refreshToken), когда решим вопрос с телом
+                api.logout()
+            } catch (e: Exception) {
+                Log.e("SpaceViewModel", "Ошибка при вызове api.logout() на сервере", e)
             } finally {
                 // Гарантированно дожидаемся очистки DataStore
                 tokenManager.clearTokens()

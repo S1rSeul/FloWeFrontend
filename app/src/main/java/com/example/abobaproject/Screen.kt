@@ -28,4 +28,8 @@ sealed class Screen(val route: String) {
 
     object SavingsList : Screen("savings_list_screen")
     object CreateSavings : Screen("create_savings_screen")
+
+    object CreateExpense : Screen("create_expense_screen")
+    object ExpenseHistory : Screen("expense_history_screen")
+    object Budgets : Screen("budgets_screen")
 }

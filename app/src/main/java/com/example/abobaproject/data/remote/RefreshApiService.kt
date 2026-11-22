@@ -17,7 +17,7 @@ interface RefreshApiService {
     suspend fun refresh(@Body request: RefreshRequest): AuthResponse
 
     companion object {
-        // Важно: должен совпадать с BASE_URL в NetworkModule
+        // Важно: должен совпадать с BASE_URL в NetworkModule (10.0.2.2 для эмулятора)
         private const val BASE_URL = "http://localhost:8080/api/v1/"
 
         fun create(): RefreshApiService {
