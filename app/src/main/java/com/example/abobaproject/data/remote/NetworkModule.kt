@@ -12,29 +12,33 @@ object NetworkModule {
 
     private const val BASE_URL = "http://localhost:8080/api/v1/"
 
+    @Volatile
+    private var apiService: ApiService? = null
+
     fun provideApiService(context: Context): ApiService {
-        // 1. Создаем TokenManager
-        val tokenManager = TokenManager(context)
+        return apiService ?: synchronized(this) {
+            val tokenManager = TokenManager(context)
+            val loggingInterceptor = HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            }
 
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            val client = OkHttpClient.Builder()
+                .addInterceptor(AuthInterceptor(tokenManager))
+                .addInterceptor(loggingInterceptor)
+                .authenticator(TokenAuthenticator(tokenManager))
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+
+            val service = Retrofit.Builder()
+                .baseUrl(BASE_URL)
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(ApiService::class.java)
+
+            apiService = service
+            service
         }
-
-        // 2. Создаем OkHttpClient и подключаем к нему наши классы
-        val client = OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor(tokenManager))
-            .addInterceptor(loggingInterceptor)
-            .authenticator(TokenAuthenticator(tokenManager))
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-
-        // 3. Собираем Retrofit
-        return Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(ApiService::class.java)
     }
 }

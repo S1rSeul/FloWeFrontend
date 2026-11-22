@@ -32,8 +32,6 @@ class MainActivity : ComponentActivity() {
             AbobaProjectTheme {
                 val navController = rememberNavController()
                 val mainViewModel: MainViewModel = viewModel()
-                val taskViewModel: TaskViewModel = viewModel()
-                val calendarViewModel: CalendarViewModel = viewModel()
 
                 NavHost(
                     navController = navController,
@@ -171,6 +169,8 @@ class MainActivity : ComponentActivity() {
 
                     // 5. Экран после подключения (AND-21)
                     composable(Screen.SpaceConnected.route) {
+                        // Создаем ViewModel здесь, он загрузится только когда мы перейдем на этот экран
+                        val taskViewModel: TaskViewModel = viewModel()
                         SpaceConnectedScreen(
                             isPartnerOnline = taskViewModel.isPartnerOnline,
                             onNavigateToTasks = {
@@ -183,6 +183,8 @@ class MainActivity : ComponentActivity() {
 
                     // 6. Список задач (AND-22)
                     composable(Screen.TaskList.route) {
+                        val taskViewModel: TaskViewModel = viewModel()
+
                         val spaceViewModel: SpaceViewModel = viewModel()
                         TaskListScreen(
                             taskViewModel = taskViewModel,
@@ -201,6 +203,8 @@ class MainActivity : ComponentActivity() {
 
                     // 7. Создание задачи (AND-23)
                     composable(Screen.CreateTask.route) {
+                        val taskViewModel: TaskViewModel = viewModel()
+
                         CreateTaskScreen(
                             onTaskCreated = { title, description, deadlineMillis, assignee ->
                                 taskViewModel.addTask(title, description, deadlineMillis, assignee)
@@ -216,6 +220,9 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("taskId") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
+
+                        val taskViewModel: TaskViewModel = viewModel()
+
                         TaskDetailScreen(
                             taskId = taskId,
                             taskViewModel = taskViewModel,
@@ -274,6 +281,8 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(Screen.Calendar.route) {
+                        val calendarViewModel: CalendarViewModel = viewModel()
+
                         CalendarScreen(
                             viewModel = calendarViewModel,
                             onTaskClick = { taskId ->
@@ -292,6 +301,8 @@ class MainActivity : ComponentActivity() {
                         route = Screen.EditEvent.route,
                         arguments = listOf(navArgument("eventId") { type = NavType.StringType })
                     ) { backStackEntry ->
+                        val calendarViewModel: CalendarViewModel = viewModel()
+
                         val eventId = backStackEntry.arguments?.getString("eventId") ?: ""
                         val event = calendarViewModel.getEventById(eventId)
 
