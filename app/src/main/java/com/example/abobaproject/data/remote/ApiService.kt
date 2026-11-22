@@ -78,4 +78,36 @@ interface ApiService {
         @Path("id") eventId: String,
         @Body request: UpdateEventRequestDto
     ): EventResponseDto
+
+    // --- M-03: Накопительные счета ---
+    @GET("savings")
+    suspend fun getSavingsAccounts(): List<SavingsAccountResponse>
+
+    @POST("savings")
+    suspend fun createSavingsAccount(@Body request: CreateSavingsAccountRequest): SavingsAccountResponse
+
+    @GET("savings/{id}")
+    suspend fun getSavingsAccountById(@Path("id") id: String): SavingsAccountResponse
+
+    @PATCH("savings/{id}")
+    suspend fun updateSavingsAccount(
+        @Path("id") id: String,
+        @Body request: UpdateSavingsAccountRequest
+    ): SavingsAccountResponse
+
+    @DELETE("savings/{id}")
+    suspend fun deleteSavingsAccount(@Path("id") id: String): Response<Unit>
+
+    @POST("savings/{id}/deposit")
+    suspend fun depositToSavings(
+        @Path("id") id: String,
+        @Body request: DepositRequest
+    ): SavingsAccountResponse
+
+    // --- M-02: Сводка расходов ---
+    @GET("expenses/summary")
+    suspend fun getExpenseSummary(
+        @Query("from") from: String,
+        @Query("to") to: String
+    ): ExpenseSummaryResponse
 }

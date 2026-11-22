@@ -25,4 +25,7 @@ sealed class Screen(val route: String) {
     object EditEvent : Screen("edit_event_screen/{eventId}") {
         fun createRoute(eventId: String) = "edit_event_screen/$eventId"
     }
+
+    object SavingsList : Screen("savings_list_screen")
+    object CreateSavings : Screen("create_savings_screen")
 }

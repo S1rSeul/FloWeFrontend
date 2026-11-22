@@ -305,6 +305,31 @@ class MainActivity : ComponentActivity() {
                             onBackClick = { navController.popBackStack() }
                         )
                     }
+
+                    composable(Screen.SavingsList.route) {
+                        val savingsViewModel: SavingsViewModel = viewModel()
+                        SavingsListScreen(
+                            viewModel = savingsViewModel,
+                            onCreateClick = { navController.navigate(Screen.CreateSavings.route) },
+                            onAccountClick = { accountId ->
+                                // Пока просто заглушка, если у тебя нет экрана деталей счета.
+                                // Если нужно, мы сделаем экран для пополнения.
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(Screen.CreateSavings.route) {
+                        val savingsViewModel: SavingsViewModel = viewModel()
+                        CreateEditSavingsScreen(
+                            onSave = { name, amount, currency ->
+                                savingsViewModel.createAccount(name, amount, currency) {
+                                    navController.popBackStack()
+                                }
+                            },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
