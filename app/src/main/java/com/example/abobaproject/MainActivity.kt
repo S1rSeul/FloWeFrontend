@@ -197,7 +197,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             },
-                            onCalendarClick = { navController.navigate(Screen.Calendar.route) }
+                            onCalendarClick = { navController.navigate(Screen.Calendar.route) },
+
+                            onSavingsClick = { navController.navigate(Screen.SavingsList.route) }, // TODO: temp
+                            onSummaryClick = { navController.navigate(Screen.Main.route) }         // TODO: temp
                         )
                     }
 

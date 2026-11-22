@@ -4,9 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,23 +44,62 @@ fun SavingsListScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+
+        PullToRefreshBox(
+            isRefreshing = viewModel.isLoading,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
             when {
-                viewModel.isLoading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                viewModel.errorMessage != null -> Text(
-                    text = viewModel.errorMessage!!,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                viewModel.isEmpty -> Text(
-                    text = "У вас пока нет общих счетов.\nНажмите +, чтобы создать.",
-                    modifier = Modifier.align(Alignment.Center),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                // Ошибка
+                viewModel.errorMessage != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Ошибка: ${viewModel.errorMessage}",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            viewModel.clearError()
+                            viewModel.refresh()
+                        }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+                // Пустое состояние
+                viewModel.isEmpty -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "У вас пока нет общих счетов.\nНажмите +, чтобы создать.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                // Список счетов
                 else -> {
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         items(viewModel.savingsAccounts, key = { it.id }) { account ->
                             SavingsAccountCard(account) { onAccountClick(account.id) }

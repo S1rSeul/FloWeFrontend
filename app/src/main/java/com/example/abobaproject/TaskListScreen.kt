@@ -42,6 +42,9 @@ import androidx.compose.ui.unit.dp
 import com.example.abobaproject.ui.components.StatusIndicator
 import com.example.abobaproject.ui.components.TaskItem
 
+import androidx.compose.material.icons.filled.Savings // TODO: temp
+import androidx.compose.material.icons.filled.PieChart // TODO: temp
+
 enum class TaskFilter(val label: String) {
     ALL("Все"),
     ACTIVE("Активные"),
@@ -57,6 +60,8 @@ fun TaskListScreen(
     onTaskClick: (String) -> Unit,
     onLogoutClick: () -> Unit,
     onCalendarClick: () -> Unit,
+    onSavingsClick: () -> Unit,    // TODO: temp
+    onSummaryClick: () -> Unit,    // TODO: temp
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
@@ -112,6 +117,21 @@ fun TaskListScreen(
                         isOnline = taskViewModel.isPartnerOnline,
                         onClick = { taskViewModel.togglePartnerStatus() }
                     )
+                    // TODO: temp  Переход к накопительным счетам
+                    IconButton(onClick = onSavingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Savings,
+                            contentDescription = "Накопительные счета"
+                        )
+                    }
+
+                    // TODO: temp  Переход к Сводке (Главному экрану)
+                    IconButton(onClick = onSummaryClick) {
+                        Icon(
+                            imageVector = Icons.Default.PieChart,
+                            contentDescription = "Сводка расходов"
+                        )
+                    }
 
                     // Кнопка перехода в Календарь
                     IconButton(onClick = onCalendarClick) {

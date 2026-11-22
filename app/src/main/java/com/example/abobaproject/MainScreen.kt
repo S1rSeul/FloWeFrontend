@@ -15,10 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+import androidx.lifecycle.viewmodel.compose.viewModel // TODO: temp
+
 @Composable
 fun MainScreen(
     onLogoutClick: () -> Unit
 ) {
+    val summaryViewModel: SummaryViewModel = viewModel() // TODO: temp
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -26,6 +30,10 @@ fun MainScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        ExpenseSummaryWidget(viewModel = summaryViewModel) // TODO: temp
+
+        Spacer(modifier = Modifier.height(16.dp)) // TODO: temp
+
         Text(
             text = "Главный экран FloWe",
             style = MaterialTheme.typography.headlineLarge
