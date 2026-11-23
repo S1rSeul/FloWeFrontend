@@ -31,7 +31,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             AbobaProjectTheme {
                 val navController = rememberNavController()
-                val mainViewModel: MainViewModel = viewModel()
+                val sharedExpenseViewModel: ExpenseViewModel = viewModel()
+                val sharedSavingsViewModel: SavingsViewModel = viewModel()
+                val sharedBudgetViewModel: BudgetViewModel = viewModel()
 
                 NavHost(
                     navController = navController,
@@ -169,7 +171,6 @@ class MainActivity : ComponentActivity() {
 
                     // 5. Экран после подключения (AND-21)
                     composable(Screen.SpaceConnected.route) {
-                        // Создаем ViewModel здесь, он загрузится только когда мы перейдем на этот экран
                         val taskViewModel: TaskViewModel = viewModel()
                         SpaceConnectedScreen(
                             isPartnerOnline = taskViewModel.isPartnerOnline,
@@ -184,8 +185,8 @@ class MainActivity : ComponentActivity() {
                     // 6. Список задач (AND-22)
                     composable(Screen.TaskList.route) {
                         val taskViewModel: TaskViewModel = viewModel()
-
                         val spaceViewModel: SpaceViewModel = viewModel()
+
                         TaskListScreen(
                             taskViewModel = taskViewModel,
                             onCreateTaskClick = { navController.navigate(Screen.CreateTask.route) },
@@ -198,9 +199,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onCalendarClick = { navController.navigate(Screen.Calendar.route) },
-
-                            onSavingsClick = { navController.navigate(Screen.SavingsList.route) }, // TODO: temp
-                            onSummaryClick = { navController.navigate(Screen.Main.route) }         // TODO: temp
+                            onSavingsClick = { navController.navigate(Screen.SavingsList.route) },
+                            onSummaryClick = { navController.navigate(Screen.Main.route) },
+                            onExpensesClick = { navController.navigate(Screen.ExpenseHistory.route) },
+                            onBudgetsClick = { navController.navigate(Screen.Budgets.route) }
                         )
                     }
 
@@ -223,7 +225,6 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("taskId") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
-
                         val taskViewModel: TaskViewModel = viewModel()
 
                         TaskDetailScreen(
@@ -233,15 +234,21 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // 9. Главный экран
+                    // 9. Главный экран (Сводка расходов M-02)
                     composable(Screen.Main.route) {
                         val spaceViewModel: SpaceViewModel = viewModel()
                         MainScreen(
+                            expenseViewModel = sharedExpenseViewModel,
                             onLogoutClick = {
                                 spaceViewModel.logout {
                                     navController.navigate(Screen.Auth.route) {
                                         popUpTo(0) { inclusive = true }
                                     }
+                                }
+                            },
+                            onBackClick = {
+                                if (!navController.popBackStack()) {
+                                    navController.navigate(Screen.TaskList.route)
                                 }
                             }
                         )
@@ -254,13 +261,11 @@ class MainActivity : ComponentActivity() {
                         QrScannerScreen(
                             onQrScanned = { scannedCode ->
                                 Log.d("MainActivity", "QR отсканирован: $scannedCode")
-                                // Передаём код в SpaceViewModel — тот сам вызовет /couples/join
                                 spaceViewModel.joinCouple(scannedCode)
                             },
                             onBackClick = { navController.popBackStack() }
                         )
 
-                        // Реагируем на смену состояния — как только пара активна, переходим
                         LaunchedEffect(spaceViewModel.spaceState) {
                             val st = spaceViewModel.spaceState
                             if (st is SpaceState.Active || st is SpaceState.WaitingPartner) {
@@ -271,25 +276,26 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // 11. Создание события календаря
                     composable(Screen.CreateEvent.route) {
                         val calendarViewModel: CalendarViewModel = viewModel()
                         CreateEventScreen(
                             onEventCreated = { title, desc, start, end ->
                                 calendarViewModel.addEvent(title, desc, start, end) {
-                                    navController.popBackStack() // Возвращаемся в календарь после создания
+                                    navController.popBackStack()
                                 }
                             },
                             onBackClick = { navController.popBackStack() }
                         )
                     }
 
+                    // 12. Календарь
                     composable(Screen.Calendar.route) {
                         val calendarViewModel: CalendarViewModel = viewModel()
 
                         CalendarScreen(
                             viewModel = calendarViewModel,
                             onTaskClick = { taskId ->
-                                // Переход к деталям задачи
                                 navController.navigate(Screen.TaskDetail.createRoute(taskId))
                             },
                             onEventClick = { eventId -> navController.navigate(Screen.EditEvent.createRoute(eventId)) },
@@ -300,12 +306,12 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // 13. Редактирование события
                     composable(
                         route = Screen.EditEvent.route,
                         arguments = listOf(navArgument("eventId") { type = NavType.StringType })
                     ) { backStackEntry ->
                         val calendarViewModel: CalendarViewModel = viewModel()
-
                         val eventId = backStackEntry.arguments?.getString("eventId") ?: ""
                         val event = calendarViewModel.getEventById(eventId)
 
@@ -320,27 +326,49 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // 14. Накопительные счета (M-03)
                     composable(Screen.SavingsList.route) {
-                        val savingsViewModel: SavingsViewModel = viewModel()
                         SavingsListScreen(
-                            viewModel = savingsViewModel,
+                            viewModel = sharedSavingsViewModel,
                             onCreateClick = { navController.navigate(Screen.CreateSavings.route) },
-                            onAccountClick = { accountId ->
-                                // Пока просто заглушка, если у тебя нет экрана деталей счета.
-                                // Если нужно, мы сделаем экран для пополнения.
+                            onAccountClick = { _ -> },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    // 15. Создание накопительного счета
+                    composable(Screen.CreateSavings.route) {
+                        CreateEditSavingsScreen(
+                            onSave = { name, amount, currency ->
+                                sharedSavingsViewModel.createAccount(name, amount, currency) {
+                                    navController.popBackStack()
+                                }
                             },
                             onBackClick = { navController.popBackStack() }
                         )
                     }
 
-                    composable(Screen.CreateSavings.route) {
-                        val savingsViewModel: SavingsViewModel = viewModel()
-                        CreateEditSavingsScreen(
-                            onSave = { name, amount, currency ->
-                                savingsViewModel.createAccount(name, amount, currency) {
-                                    navController.popBackStack()
-                                }
-                            },
+                    // 16. Создание расхода (M-01-FE-01)
+                    composable(Screen.CreateExpense.route) {
+                        CreateExpenseScreen(
+                            expenseViewModel = sharedExpenseViewModel,
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    // 17. История расходов (M-05-FE-01)
+                    composable(Screen.ExpenseHistory.route) {
+                        ExpenseHistoryScreen(
+                            expenseViewModel = sharedExpenseViewModel,
+                            onCreateExpenseClick = { navController.navigate(Screen.CreateExpense.route) },
+                            onBackClick = { navController.popBackStack() }
+                        )
+                    }
+
+                    // 18. Бюджеты и лимиты (M-04-FE-01)
+                    composable(Screen.Budgets.route) {
+                        BudgetListScreen(
+                            budgetViewModel = sharedBudgetViewModel,
                             onBackClick = { navController.popBackStack() }
                         )
                     }

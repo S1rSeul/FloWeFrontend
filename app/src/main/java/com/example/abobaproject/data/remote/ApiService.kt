@@ -110,4 +110,39 @@ interface ApiService {
         @Query("from") from: String,
         @Query("to") to: String
     ): ExpenseSummaryResponse
+
+    // --- M-01 & M-05: Расходы ---
+    @GET("expenses")
+    suspend fun getExpenses(
+        @Query("category") category: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null
+    ): ExpenseHistoryResponse // ТЕПЕРЬ возвращаем объект, а не список!
+
+    @POST("expenses")
+    suspend fun createExpense(@Body request: CreateExpenseRequest): ExpenseResponse
+
+    @PATCH("expenses/{id}") // ДОБАВЛЕН МЕТОД ДЛЯ РЕДАКТИРОВАНИЯ
+    suspend fun updateExpense(
+        @Path("id") id: String,
+        @Body request: UpdateExpenseRequest
+    ): ExpenseResponse
+
+    @DELETE("expenses/{id}")
+    suspend fun deleteExpense(@Path("id") id: String): Response<Unit>
+
+    // --- M-04: Бюджеты ---
+    @GET("budgets")
+    suspend fun getBudgets(): List<BudgetResponse>
+
+    @POST("budgets")
+    suspend fun createBudget(@Body request: CreateBudgetRequest): BudgetResponse
+
+    @PATCH("budgets/{id}")
+    suspend fun updateBudget(
+        @Path("id") id: String,
+        @Body request: UpdateBudgetRequest
+    ): BudgetResponse
+    @DELETE("budgets/{id}")
+    suspend fun deleteBudget(@Path("id") id: String): Response<Unit>
 }

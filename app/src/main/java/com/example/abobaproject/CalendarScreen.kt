@@ -146,7 +146,11 @@ fun CalendarScreen(
                     MonthView(
                         currentMonth = viewModel.currentMonth,
                         items = viewModel.calendarItems,
-                        onDayClick = { /* TODO: Пока оставляем пустым */ }
+                        onDayClick = { timestamp ->
+                            viewModel.selectedDate = timestamp
+                            viewModel.viewMode = CalendarViewMode.WEEK
+                            viewModel.loadCalendarData()
+                        }
                     )
                 } else {
                     WeekView(

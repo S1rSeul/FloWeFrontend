@@ -11,7 +11,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.abobaproject.data.model.*
 import com.example.abobaproject.data.remote.NetworkModule
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class SavingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,18 +26,21 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     var isEmpty by mutableStateOf(false)
         private set
 
+    // УДАЛЕН блок init с мок-данными (Отпуск, Ноутбук)
+
     fun refresh() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
             try {
                 val accounts = api.getSavingsAccounts()
-                _savingsAccounts.clear()
+                _savingsAccounts.clear() // Всегда очищаем перед загрузкой
                 _savingsAccounts.addAll(accounts)
                 isEmpty = _savingsAccounts.isEmpty()
             } catch (e: Exception) {
                 Log.e("SavingsViewModel", "Ошибка загрузки", e)
-                errorMessage = e.message ?: "Ошибка сети"
+                errorMessage = "Ошибка сети"
+                isEmpty = _savingsAccounts.isEmpty()
             } finally {
                 isLoading = false
             }
@@ -48,6 +50,7 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     fun createAccount(name: String, targetAmount: Double, currency: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                // Убрали оптимистичное добавление, ждем ответа сервера
                 val request = CreateSavingsAccountRequest(name, targetAmount, currency)
                 val created = api.createSavingsAccount(request)
                 _savingsAccounts.add(created)
@@ -64,9 +67,12 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             try {
                 val request = UpdateSavingsAccountRequest(name, targetAmount)
+                // Берем обновленный объект с сервера и заменяем старый
                 val updated = api.updateSavingsAccount(id, request)
                 val index = _savingsAccounts.indexOfFirst { it.id == id }
-                if (index != -1) _savingsAccounts[index] = updated
+                if (index != -1) {
+                    _savingsAccounts[index] = updated
+                }
                 onSuccess()
             } catch (e: Exception) {
                 Log.e("SavingsViewModel", "Ошибка обновления", e)
@@ -78,9 +84,12 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     fun depositToAccount(id: String, amount: Double, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                // Отправляем запрос и берем результат с сервера (там обновленный баланс и прогресс)
                 val updated = api.depositToSavings(id, DepositRequest(amount))
                 val index = _savingsAccounts.indexOfFirst { it.id == id }
-                if (index != -1) _savingsAccounts[index] = updated
+                if (index != -1) {
+                    _savingsAccounts[index] = updated
+                }
                 onSuccess()
             } catch (e: Exception) {
                 Log.e("SavingsViewModel", "Ошибка пополнения", e)
@@ -90,14 +99,13 @@ class SavingsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun deleteAccount(id: String) {
+        _savingsAccounts.removeAll { it.id == id }
+        isEmpty = _savingsAccounts.isEmpty()
         viewModelScope.launch {
             try {
                 api.deleteSavingsAccount(id)
-                _savingsAccounts.removeAll { it.id == id }
-                isEmpty = _savingsAccounts.isEmpty()
             } catch (e: Exception) {
                 Log.e("SavingsViewModel", "Ошибка удаления", e)
-                errorMessage = "Не удалось удалить счет"
             }
         }
     }

@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object NetworkModule {
 
+    // Адрес бэкенда в Docker на хост-машине для эмулятора Android (10.0.2.2 -> localhost на ПК)
     private const val BASE_URL = "http://localhost:8080/api/v1/"
 
     @Volatile
