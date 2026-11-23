@@ -1,6 +1,7 @@
 package com.example.abobaproject
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,9 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -63,6 +67,8 @@ fun TaskListScreen(
     modifier: Modifier = Modifier
 ) {
     var currentFilter by remember { mutableStateOf(TaskFilter.ALL) }
+
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val filteredTasks = when (currentFilter) {
         TaskFilter.ALL -> taskViewModel.tasks
@@ -114,46 +120,56 @@ fun TaskListScreen(
                         onClick = { taskViewModel.togglePartnerStatus() }
                     )
 
-                    IconButton(onClick = onSavingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Savings,
-                            contentDescription = "Накопительные счета"
-                        )
-                    }
-
-                    IconButton(onClick = onExpensesClick) {
-                        Icon(
-                            imageVector = Icons.Default.ReceiptLong,
-                            contentDescription = "История расходов"
-                        )
-                    }
-
-                    IconButton(onClick = onBudgetsClick) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalanceWallet,
-                            contentDescription = "Бюджеты"
-                        )
-                    }
-
-                    IconButton(onClick = onSummaryClick) {
-                        Icon(
-                            imageVector = Icons.Default.PieChart,
-                            contentDescription = "Сводка расходов"
-                        )
+                    // Кнопка вызова меню
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Финансы")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Накопительные счета") },
+                                leadingIcon = { Icon(Icons.Default.Savings, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onSavingsClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("История расходов") },
+                                leadingIcon = { Icon(Icons.Default.ReceiptLong, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onExpensesClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Бюджеты и лимиты") },
+                                leadingIcon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onBudgetsClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Сводка расходов") },
+                                leadingIcon = { Icon(Icons.Default.PieChart, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onSummaryClick()
+                                }
+                            )
+                        }
                     }
 
                     IconButton(onClick = onCalendarClick) {
-                        Icon(
-                            imageVector = Icons.Default.DateRange,
-                            contentDescription = "Календарь"
-                        )
+                        Icon(Icons.Default.DateRange, contentDescription = "Календарь")
                     }
 
                     IconButton(onClick = onLogoutClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "Выйти из аккаунта"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Выйти")
                     }
                 }
             }

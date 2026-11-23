@@ -369,7 +369,6 @@ class MainActivity : ComponentActivity() {
                     composable(Screen.Budgets.route) {
                         BudgetListScreen(
                             budgetViewModel = sharedBudgetViewModel,
-                            expenseViewModel = sharedExpenseViewModel,
                             onBackClick = { navController.popBackStack() }
                         )
                     }

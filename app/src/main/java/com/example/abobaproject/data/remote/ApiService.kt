@@ -115,15 +115,18 @@ interface ApiService {
     @GET("expenses")
     suspend fun getExpenses(
         @Query("category") category: String? = null,
-        @Query("payer") payer: String? = null,
-        @Query("from") from: String? = null,
-        @Query("to") to: String? = null,
         @Query("limit") limit: Int? = null,
         @Query("cursor") cursor: String? = null
-    ): List<ExpenseResponse>
+    ): ExpenseHistoryResponse // ТЕПЕРЬ возвращаем объект, а не список!
 
     @POST("expenses")
     suspend fun createExpense(@Body request: CreateExpenseRequest): ExpenseResponse
+
+    @PATCH("expenses/{id}") // ДОБАВЛЕН МЕТОД ДЛЯ РЕДАКТИРОВАНИЯ
+    suspend fun updateExpense(
+        @Path("id") id: String,
+        @Body request: UpdateExpenseRequest
+    ): ExpenseResponse
 
     @DELETE("expenses/{id}")
     suspend fun deleteExpense(@Path("id") id: String): Response<Unit>
@@ -133,8 +136,13 @@ interface ApiService {
     suspend fun getBudgets(): List<BudgetResponse>
 
     @POST("budgets")
-    suspend fun setBudget(@Body request: SetBudgetRequest): BudgetResponse
+    suspend fun createBudget(@Body request: CreateBudgetRequest): BudgetResponse
 
+    @PATCH("budgets/{id}")
+    suspend fun updateBudget(
+        @Path("id") id: String,
+        @Body request: UpdateBudgetRequest
+    ): BudgetResponse
     @DELETE("budgets/{id}")
     suspend fun deleteBudget(@Path("id") id: String): Response<Unit>
 }

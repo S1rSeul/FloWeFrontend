@@ -8,11 +8,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.abobaproject.data.FinanceMapper
 import com.example.abobaproject.data.model.BudgetResponse
-import com.example.abobaproject.data.model.SetBudgetRequest
+import com.example.abobaproject.data.model.CreateBudgetRequest
 import com.example.abobaproject.data.remote.NetworkModule
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class BudgetViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,34 +27,7 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
-    init {
-        _budgets.addAll(
-            listOf(
-                BudgetResponse(
-                    id = UUID.randomUUID().toString(),
-                    category = "Еда",
-                    limitAmount = 15000.0,
-                    currentAmount = 0.0,
-                    currency = "RUB"
-                ),
-                BudgetResponse(
-                    id = UUID.randomUUID().toString(),
-                    category = "Транспорт",
-                    limitAmount = 10000.0,
-                    currentAmount = 0.0,
-                    currency = "RUB"
-                ),
-                BudgetResponse(
-                    id = UUID.randomUUID().toString(),
-                    category = "Развлечения",
-                    limitAmount = 12000.0,
-                    currentAmount = 0.0,
-                    currency = "RUB"
-                )
-            )
-        )
-        loadBudgets()
-    }
+    // Блок init с фейковыми данными УДАЛЕН
 
     fun loadBudgets() {
         viewModelScope.launch {
@@ -62,12 +35,11 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
             errorMessage = null
             try {
                 val remoteBudgets = api.getBudgets()
-                if (remoteBudgets.isNotEmpty()) {
-                    _budgets.clear()
-                    _budgets.addAll(remoteBudgets)
-                }
+                _budgets.clear()
+                _budgets.addAll(remoteBudgets)
             } catch (e: Exception) {
-                Log.e("BudgetViewModel", "Ошибка загрузки бюджетов с сервера, работаем в локальном режиме", e)
+                Log.e("BudgetViewModel", "Ошибка загрузки бюджетов", e)
+                errorMessage = "Не удалось загрузить бюджеты"
             } finally {
                 isLoading = false
             }
@@ -87,36 +59,34 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         errorMessage = null
-        val catName = category.takeIf { it.isNotBlank() && it != "Общий" }
-
-        val tempBudget = BudgetResponse(
-            id = UUID.randomUUID().toString(),
-            category = catName,
-            limitAmount = limit,
-            currentAmount = 0.0,
-            currency = currency
-        )
-
-        val index = _budgets.indexOfFirst { (it.category ?: "Общий") == (catName ?: "Общий") }
-        if (index != -1) {
-            val old = _budgets[index]
-            _budgets[index] = old.copy(limitAmount = limit, currency = currency)
-        } else {
-            _budgets.add(tempBudget)
-        }
-
-        onSuccess()
+        // Переводим русское название категории ("Еда") в код сервера ("FOOD")
+        val serverCategory = if (category == "Общий") null else FinanceMapper.categoryToServer(category)
 
         viewModelScope.launch {
             try {
-                val request = SetBudgetRequest(
-                    category = catName,
+                // Создаем запрос по новой модели
+                val request = CreateBudgetRequest(
+                    category = serverCategory,
                     limitAmount = limit,
                     currency = currency
                 )
-                api.setBudget(request)
+
+                // Отправляем на сервер и получаем ответ
+                val createdBudget = api.createBudget(request)
+
+                // Добавляем реальный ответ от сервера в список (сервер сам посчитал spentAmount и т.д.)
+                // Проверяем, нет ли уже бюджета на эту категорию, чтобы обновить, а не дублировать
+                val index = _budgets.indexOfFirst { it.category == createdBudget.category }
+                if (index != -1) {
+                    _budgets[index] = createdBudget
+                } else {
+                    _budgets.add(createdBudget)
+                }
+
+                onSuccess()
             } catch (e: Exception) {
                 Log.e("BudgetViewModel", "Ошибка отправки лимита на бэкенд", e)
+                errorMessage = "Не удалось сохранить бюджет"
             }
         }
     }

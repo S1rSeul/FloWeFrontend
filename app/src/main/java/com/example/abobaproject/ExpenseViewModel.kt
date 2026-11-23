@@ -8,13 +8,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.abobaproject.data.FinanceMapper
 import com.example.abobaproject.data.model.CreateExpenseRequest
 import com.example.abobaproject.data.model.ExpenseResponse
+import com.example.abobaproject.data.model.UpdateExpenseRequest
 import com.example.abobaproject.data.remote.NetworkModule
 import com.example.abobaproject.ui.components.PayerType
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.util.UUID
 
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -32,53 +32,40 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     var selectedCategoryFilter by mutableStateOf("Все")
     var selectedPayerFilter by mutableStateOf("Все")
 
-    init {
-        _expenses.addAll(
-            listOf(
-                ExpenseResponse(
-                    id = UUID.randomUUID().toString(),
-                    amount = 3500.0,
-                    currency = "RUB",
-                    category = "Еда",
-                    payer = "ME",
-                    date = LocalDate.now().toString(),
-                    description = "Покупка продуктов в гипермаркете"
-                ),
-                ExpenseResponse(
-                    id = UUID.randomUUID().toString(),
-                    amount = 1200.0,
-                    currency = "RUB",
-                    category = "Транспорт",
-                    payer = "PARTNER",
-                    date = LocalDate.now().minusDays(1).toString(),
-                    description = "Заправка авто"
-                ),
-                ExpenseResponse(
-                    id = UUID.randomUUID().toString(),
-                    amount = 4800.0,
-                    currency = "RUB",
-                    category = "Развлечения",
-                    payer = "BOTH",
-                    date = LocalDate.now().minusDays(2).toString(),
-                    description = "Билеты в театр"
-                )
-            )
-        )
-        loadExpenses()
-    }
+    var nextCursor by mutableStateOf<String?>(null)
+    var hasMore by mutableStateOf(true)
+
+    // УДАЛЕН блок init с фейковыми данными
 
     fun loadExpenses() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
             try {
-                val remoteExpenses = api.getExpenses()
-                if (remoteExpenses.isNotEmpty()) {
-                    _expenses.clear()
-                    _expenses.addAll(remoteExpenses)
-                }
+                val response = api.getExpenses()
+                _expenses.clear()
+                _expenses.addAll(response.items)
+                nextCursor = response.nextCursor
+                hasMore = response.hasMore
             } catch (e: Exception) {
-                Log.e("ExpenseViewModel", "Ошибка загрузки расходов из сети, работаем в локальном/оптимистичном режиме", e)
+                errorMessage = "Ошибка загрузки"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun loadMoreExpenses() {
+        if (isLoading || !hasMore || nextCursor == null) return
+        viewModelScope.launch {
+            isLoading = true
+            try {
+                val response = api.getExpenses(cursor = nextCursor)
+                _expenses.addAll(response.items) // ДОБАВЛЯЕМ в конец, а не очищаем
+                nextCursor = response.nextCursor
+                hasMore = response.hasMore
+            } catch (e: Exception) {
+                Log.e("ExpenseViewModel", "Ошибка подгрузки", e)
             } finally {
                 isLoading = false
             }
@@ -106,42 +93,31 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
         errorMessage = null
 
-        val payerCode = when (payer) {
-            PayerType.ME -> "ME"
-            PayerType.PARTNER -> "PARTNER"
-            PayerType.BOTH -> "BOTH"
+        // Высчитываем доли
+        val myAmount = when (payer) {
+            PayerType.ME -> amount
+            PayerType.PARTNER -> 0.0
+            PayerType.BOTH -> amount / 2.0
         }
-
-        val tempExpense = ExpenseResponse(
-            id = UUID.randomUUID().toString(),
-            amount = amount,
-            currency = currency,
-            category = category,
-            payer = payerCode,
-            date = dateStr,
-            description = description.takeIf { it.isNotBlank() }
-        )
-
-        _expenses.add(0, tempExpense)
-        onSuccess()
+        val partnerAmount = amount - myAmount
 
         viewModelScope.launch {
             try {
                 val request = CreateExpenseRequest(
                     amount = amount,
+                    myPaidAmount = myAmount,
+                    partnerPaidAmount = partnerAmount,
                     currency = currency,
-                    category = category,
-                    payer = payerCode,
-                    date = dateStr,
+                    category = FinanceMapper.categoryToServer(category), // Перевод "Еда" -> "FOOD"
+                    spentAt = FinanceMapper.dateToIso(dateStr),          // Перевод даты в ISO
                     description = description.takeIf { it.isNotBlank() }
                 )
                 val created = api.createExpense(request)
-                val index = _expenses.indexOfFirst { it.id == tempExpense.id }
-                if (index != -1) {
-                    _expenses[index] = created
-                }
+                _expenses.add(0, created) // Добавляем реальный ответ от сервера
+                onSuccess()
             } catch (e: Exception) {
-                Log.e("ExpenseViewModel", "Ошибка сохранения расхода на бэкенде", e)
+                Log.e("ExpenseViewModel", "Ошибка сохранения расхода", e)
+                errorMessage = "Ошибка сохранения на сервере"
             }
         }
     }
@@ -161,31 +137,39 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
             errorMessage = "Введите корректную сумму больше нуля"
             return
         }
-        if (category.isBlank()) {
-            errorMessage = "Выберите категорию расхода"
-            return
-        }
 
         errorMessage = null
 
-        val payerCode = when (payer) {
-            PayerType.ME -> "ME"
-            PayerType.PARTNER -> "PARTNER"
-            PayerType.BOTH -> "BOTH"
+        val myAmount = when (payer) {
+            PayerType.ME -> amount
+            PayerType.PARTNER -> 0.0
+            PayerType.BOTH -> amount / 2.0
         }
+        val partnerAmount = amount - myAmount
 
-        val index = _expenses.indexOfFirst { it.id == id }
-        if (index != -1) {
-            _expenses[index] = _expenses[index].copy(
-                amount = amount,
-                currency = currency,
-                category = category,
-                payer = payerCode,
-                date = dateStr,
-                description = description.takeIf { it.isNotBlank() }
-            )
+        viewModelScope.launch {
+            try {
+                val request = UpdateExpenseRequest(
+                    amount = amount,
+                    myPaidAmount = myAmount,
+                    partnerPaidAmount = partnerAmount,
+                    currency = currency,
+                    category = FinanceMapper.categoryToServer(category),
+                    spentAt = FinanceMapper.dateToIso(dateStr),
+                    description = description.takeIf { it.isNotBlank() }
+                )
+                // Отправляем на сервер и обновляем локальный список
+                val updated = api.updateExpense(id, request)
+                val index = _expenses.indexOfFirst { it.id == id }
+                if (index != -1) {
+                    _expenses[index] = updated
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("ExpenseViewModel", "Ошибка обновления расхода", e)
+                errorMessage = "Ошибка обновления на сервере"
+            }
         }
-        onSuccess()
     }
 
     fun deleteExpense(id: String) {
@@ -202,9 +186,10 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     val filteredExpenses: List<ExpenseResponse>
         get() {
             return _expenses.filter { expense ->
-                val categoryMatch = selectedCategoryFilter == "Все" || expense.category.equals(selectedCategoryFilter, ignoreCase = true)
+                val categoryMatch = selectedCategoryFilter == "Все" ||
+                        FinanceMapper.categoryToUi(expense.category).equals(selectedCategoryFilter, ignoreCase = true)
                 val payerMatch = when (selectedPayerFilter) {
-                    "Я" -> expense.payer == "ME"
+                    "Я" -> expense.payer == "ME" // expense.payer теперь вычисляется автоматически в модели!
                     "Партнёр" -> expense.payer == "PARTNER"
                     "Пополам" -> expense.payer == "BOTH"
                     else -> true

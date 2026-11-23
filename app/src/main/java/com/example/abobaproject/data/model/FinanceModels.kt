@@ -42,46 +42,77 @@ data class CurrencySummary(
     val partnerPaidAmount: Double
 )
 
-// --- Модели для Расходов (M-01 & M-05) ---
-
-data class ExpenseResponse(
-    val id: String,
-    val amount: Double,
-    val currency: String,
-    val category: String,
-    val payer: String, // "ME", "PARTNER", "BOTH"
-    val date: String,
-    val description: String? = null,
-    val createdById: String? = null
-)
-
 data class CreateExpenseRequest(
     val amount: Double,
+    val myPaidAmount: Double,      // Сколько заплатил я
+    val partnerPaidAmount: Double, // Сколько заплатил партнер
     val currency: String,
-    val category: String,
-    val payer: String,
-    val date: String,
+    val category: String,          // Только английские коды: FOOD, TRANSPORT...
+    val spentAt: String,           // Дата в формате ISO: "2026-11-23T12:00:00Z"
     val description: String? = null
 )
 
-data class ExpenseListResponse(
-    val items: List<ExpenseResponse>,
-    val nextCursor: String? = null
+// Модель для РЕДАКТИРОВАНИЯ (PATCH запрос)
+data class UpdateExpenseRequest(
+    val amount: Double? = null,
+    val myPaidAmount: Double? = null,
+    val partnerPaidAmount: Double? = null,
+    val currency: String? = null,
+    val category: String? = null,
+    val spentAt: String? = null,
+    val description: String? = null
 )
 
-// --- Модели для Бюджетов (M-04) ---
+// Модель, которую ПОЛУЧАЕМ с сервера
+data class ExpenseResponse(
+    val id: String,
+    val amount: Double,
+    val myPaidAmount: Double,
+    val partnerPaidAmount: Double,
+    val currency: String,
+    val category: String,
+    val spentAt: String, // Дата в ISO
+    val description: String? = null,
+    val createdAt: String? = null
+) {
+    // Добавляем локальное свойство для UI, чтобы твой код товарища (который использует payer) не сломался
+    val payer: String
+        get() = when {
+            myPaidAmount == amount && partnerPaidAmount == 0.0 -> "ME"
+            partnerPaidAmount == amount && myPaidAmount == 0.0 -> "PARTNER"
+            else -> "BOTH"
+        }
+
+    // Локальное свойство для красивой даты в UI (первые 10 символов ISO)
+    val date: String get() = spentAt.take(10)
+}
+
+// История расходов (возвращается с GET /expenses)
+data class ExpenseHistoryResponse(
+    val items: List<ExpenseResponse>,
+    val nextCursor: String? = null,
+    val hasMore: Boolean = false
+)
+
+// --- БЮДЖЕТЫ (ИСПРАВЛЕНО ПОД НОВЫЙ SWAGGER) ---
+data class CreateBudgetRequest(
+    val category: String? = null, // null = общий бюджет
+    val limitAmount: Double,
+    val currency: String = "RUB"
+)
 
 data class BudgetResponse(
     val id: String,
-    val category: String?, // null если общий лимит
-    val limitAmount: Double,
-    val currentAmount: Double,
-    val currency: String,
-    val period: String? = "MONTH"
-)
-
-data class SetBudgetRequest(
     val category: String?,
     val limitAmount: Double,
-    val currency: String = "RUB"
+    val currency: String,
+    val period: String? = "MONTHLY",
+    val spentAmount: Double = 0.0,   // Сервер САМ считает, сколько потрачено!
+    val remainingAmount: Double = 0.0,
+    val usagePercent: Double = 0.0,
+    val isExceeded: Boolean = false  // И САМ говорит, превышен ли лимит!
+)
+
+data class UpdateBudgetRequest(
+    val limitAmount: Double
 )

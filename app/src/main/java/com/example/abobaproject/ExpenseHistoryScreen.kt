@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -187,6 +188,22 @@ fun ExpenseHistoryScreen(
                             expense = expense,
                             onClick = { selectedExpenseForEdit = expense }
                         )
+                    }
+
+                    // ДОБАВИТЬ ЭТО:
+                    if (expenseViewModel.hasMore) {
+                        item {
+                            Button(
+                                onClick = { expenseViewModel.loadMoreExpenses() },
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                if (expenseViewModel.isLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                } else {
+                                    Text("Загрузить еще")
+                                }
+                            }
+                        }
                     }
                 }
             }

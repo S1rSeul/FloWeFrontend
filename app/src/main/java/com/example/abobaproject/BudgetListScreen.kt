@@ -50,20 +50,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.abobaproject.data.model.BudgetResponse
+import com.example.abobaproject.data.FinanceMapper
 
 // M-04-FE-01: Экран бюджетов и установки лимитов
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetListScreen(
     budgetViewModel: BudgetViewModel,
-    expenseViewModel: ExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedBudgetForEdit by remember { mutableStateOf<BudgetResponse?>(null) }
     var showNewBudgetDialog by remember { mutableStateOf(false) }
-
-    val expenses = expenseViewModel.expenses
 
     Scaffold(
         modifier = modifier,
@@ -124,17 +122,9 @@ fun BudgetListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(budgetViewModel.budgets, key = { it.id }) { budget ->
-                        val currentSpent = remember(expenses.size, expenses.toList()) {
-                            if (budget.category == null || budget.category == "Общий") {
-                                expenses.sumOf { it.amount }
-                            } else {
-                                expenses.filter { it.category.equals(budget.category, ignoreCase = true) }.sumOf { it.amount }
-                            }
-                        }
-
+                        // Больше не считаем currentSpent, сервер всё сделал за нас
                         BudgetCardItem(
                             budget = budget,
-                            spentAmount = currentSpent,
                             onClick = { selectedBudgetForEdit = budget }
                         )
                     }
@@ -163,14 +153,11 @@ fun BudgetListScreen(
 @Composable
 fun BudgetCardItem(
     budget: BudgetResponse,
-    spentAmount: Double,
     onClick: () -> Unit
 ) {
-    val progress = if (budget.limitAmount > 0) {
-        (spentAmount / budget.limitAmount).toFloat().coerceIn(0f, 1f)
-    } else 0f
-
-    val isExceeded = spentAmount > budget.limitAmount
+    // Сервер отдает usagePercent от 0 до 100, переводим в 0.0 - 1.0
+    val progress = (budget.usagePercent / 100.0).toFloat().coerceIn(0f, 1f)
+    val isExceeded = budget.isExceeded // Сервер сам сказал, превышен ли лимит!
     val isWarning = !isExceeded && progress >= 0.8f
 
     val progressColor = when {
@@ -179,10 +166,11 @@ fun BudgetCardItem(
         else -> MaterialTheme.colorScheme.primary
     }
 
+    // Переводим "FOOD" с сервера в "Еда" для UI
+    val uiCategory = budget.category?.let { FinanceMapper.categoryToUi(it) } ?: "Общий"
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -192,12 +180,10 @@ fun BudgetCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(text = uiCategory, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = budget.category ?: "Общий бюджет",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "${spentAmount.toInt()} / ${budget.limitAmount.toInt()} ${budget.currency}",
+                    // Используем spentAmount и limitAmount напрямую с сервера
+                    text = "${budget.spentAmount.toInt()} / ${budget.limitAmount.toInt()} ${budget.currency}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isExceeded) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -207,31 +193,23 @@ fun BudgetCardItem(
 
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp),
+                modifier = Modifier.fillMaxWidth().height(10.dp),
                 color = progressColor,
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
             )
 
             if (isExceeded) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFFFEBEE)
-                ) {
+                Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFFEBEE)) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color(0xFFD32F2F)
-                        )
+                        Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD32F2F))
                         Spacer(modifier = Modifier.padding(horizontal = 4.dp))
                         Text(
-                            text = "Превышение лимита на ${(spentAmount - budget.limitAmount).toInt()} ${budget.currency}!",
+                            // Используем remainingAmount с сервера (остаток)
+                            text = "Превышение на ${Math.abs(budget.remainingAmount).toInt()} ${budget.currency}!",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFFD32F2F)
                         )
