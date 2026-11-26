@@ -3,6 +3,7 @@ package com.example.abobaproject
 import android.app.DatePickerDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +61,6 @@ import com.example.abobaproject.ui.components.PayerToggle
 import com.example.abobaproject.ui.components.PayerType
 import java.util.Calendar
 
-// M-05-FE-01: Экран истории расходов
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseHistoryScreen(
@@ -70,6 +72,11 @@ fun ExpenseHistoryScreen(
     val categories = listOf("Все", "Еда", "Транспорт", "Развлечения", "Коммуналка", "Покупки", "Другое")
     val payers = listOf("Все", "Я", "Партнёр", "Пополам")
     var selectedExpenseForEdit by remember { mutableStateOf<ExpenseResponse?>(null) }
+
+    // АВТОЗАГРУЗКА при открытии экрана
+    LaunchedEffect(Unit) {
+        expenseViewModel.loadExpenses()
+    }
 
     Scaffold(
         modifier = modifier,
@@ -156,51 +163,68 @@ fun ExpenseHistoryScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (expenseViewModel.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else if (expenseViewModel.filteredExpenses.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Расходы не найдены",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Попробуйте изменить фильтры или добавить новый расход",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(expenseViewModel.filteredExpenses, key = { it.id }) { expense ->
-                        ExpenseItemCard(
-                            expense = expense,
-                            onClick = { selectedExpenseForEdit = expense }
-                        )
+            // СВАЙП для обновления списка
+            PullToRefreshBox(
+                isRefreshing = expenseViewModel.isLoading,
+                onRefresh = { expenseViewModel.loadExpenses() },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when {
+                    expenseViewModel.isLoading && expenseViewModel.filteredExpenses.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
+                    expenseViewModel.filteredExpenses.isEmpty() -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Расходы не найдены",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Потяните вниз, чтобы обновить, или добавьте новый расход",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(bottom = 80.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(expenseViewModel.filteredExpenses, key = { it.id }) { expense ->
+                                ExpenseItemCard(
+                                    expense = expense,
+                                    onClick = { selectedExpenseForEdit = expense }
+                                )
+                            }
 
-                    // ДОБАВИТЬ ЭТО:
-                    if (expenseViewModel.hasMore) {
-                        item {
-                            Button(
-                                onClick = { expenseViewModel.loadMoreExpenses() },
-                                modifier = Modifier.fillMaxWidth().padding(16.dp)
-                            ) {
-                                if (expenseViewModel.isLoading) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                                } else {
-                                    Text("Загрузить еще")
+                            // Пагинация (если есть)
+                            if (expenseViewModel.hasMore) {
+                                item {
+                                    Button(
+                                        onClick = { expenseViewModel.loadMoreExpenses() },
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                                    ) {
+                                        if (expenseViewModel.isLoading) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        } else {
+                                            Text("Загрузить еще")
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.abobaproject.data.FinanceMapper
 import com.example.abobaproject.data.model.BudgetResponse
 import com.example.abobaproject.data.model.CreateBudgetRequest
+import com.example.abobaproject.data.model.UpdateBudgetRequest
 import com.example.abobaproject.data.remote.NetworkModule
 import kotlinx.coroutines.launch
 
@@ -26,8 +27,6 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
 
     var errorMessage by mutableStateOf<String?>(null)
         private set
-
-    // Блок init с фейковыми данными УДАЛЕН
 
     fun loadBudgets() {
         viewModelScope.launch {
@@ -46,7 +45,9 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun setBudget(
+    // budgetId != null — редактирование, budgetId == null — создание
+    fun saveBudget(
+        budgetId: String?,
         category: String,
         limitAmountStr: String,
         currency: String = "RUB",
@@ -57,36 +58,40 @@ class BudgetViewModel(application: Application) : AndroidViewModel(application) 
             errorMessage = "Введите корректный лимит больше нуля"
             return
         }
-
         errorMessage = null
-        // Переводим русское название категории ("Еда") в код сервера ("FOOD")
-        val serverCategory = if (category == "Общий") null else FinanceMapper.categoryToServer(category)
 
         viewModelScope.launch {
             try {
-                // Создаем запрос по новой модели
-                val request = CreateBudgetRequest(
-                    category = serverCategory,
-                    limitAmount = limit,
-                    currency = currency
-                )
-
-                // Отправляем на сервер и получаем ответ
-                val createdBudget = api.createBudget(request)
-
-                // Добавляем реальный ответ от сервера в список (сервер сам посчитал spentAmount и т.д.)
-                // Проверяем, нет ли уже бюджета на эту категорию, чтобы обновить, а не дублировать
-                val index = _budgets.indexOfFirst { it.category == createdBudget.category }
-                if (index != -1) {
-                    _budgets[index] = createdBudget
+                if (budgetId != null) {
+                    // Редактирование — PATCH /budgets/{id}
+                    val request = UpdateBudgetRequest(limitAmount = limit)
+                    val updated = api.updateBudget(budgetId, request)
+                    val index = _budgets.indexOfFirst { it.id == budgetId }
+                    if (index != -1) {
+                        _budgets[index] = updated
+                    }
                 } else {
-                    _budgets.add(createdBudget)
-                }
+                    // Создание — POST /budgets
+                    // Отправляем "OTHER" вместо null для "Общего" бюджета, чтобы сервер не ругался
+                    val serverCategory = FinanceMapper.categoryToServer(category)
 
+                    val request = CreateBudgetRequest(
+                        category = serverCategory,
+                        limitAmount = limit,
+                        currency = currency
+                    )
+                    val created = api.createBudget(request)
+                    _budgets.add(created)
+                }
                 onSuccess()
+            } catch (e: retrofit2.HttpException) {
+                // Если сервер вернул ошибку (400, 409, 500), мы вытащим её текст
+                val errorBody = e.response()?.errorBody()?.string()
+                Log.e("BudgetViewModel", "ОШИБКА СЕРВЕРА: Код ${e.code()}, Ответ: $errorBody", e)
+                errorMessage = "Ошибка сервера: ${e.code()}"
             } catch (e: Exception) {
-                Log.e("BudgetViewModel", "Ошибка отправки лимита на бэкенд", e)
-                errorMessage = "Не удалось сохранить бюджет"
+                Log.e("BudgetViewModel", "ОШИБКА СЕТИ", e)
+                errorMessage = "Ошибка сети"
             }
         }
     }
