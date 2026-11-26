@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -39,7 +41,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.example.abobaproject.data.model.BudgetResponse
 import com.example.abobaproject.data.FinanceMapper
+import com.example.abobaproject.data.model.BudgetResponse
 
 // M-04-FE-01: Экран бюджетов и установки лимитов
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,6 +66,11 @@ fun BudgetListScreen(
 ) {
     var selectedBudgetForEdit by remember { mutableStateOf<BudgetResponse?>(null) }
     var showNewBudgetDialog by remember { mutableStateOf(false) }
+
+    // АВТООБНОВЛЕНИЕ: Загружаем данные при каждом открытии экрана
+    LaunchedEffect(Unit) {
+        budgetViewModel.loadBudgets()
+    }
 
     Scaffold(
         modifier = modifier,
@@ -90,18 +99,30 @@ fun BudgetListScreen(
             }
         }
     ) { paddingValues ->
-        Column(
+
+        // SWIPE-TO-REFRESH: Оборачиваем весь контент в PullToRefreshBox
+        PullToRefreshBox(
+            isRefreshing = budgetViewModel.isLoading,
+            onRefresh = { budgetViewModel.loadBudgets() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            if (budgetViewModel.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            if (budgetViewModel.isLoading && budgetViewModel.budgets.isEmpty()) {
+                // Показываем загрузку только при первой загрузке (если список пуст)
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             } else if (budgetViewModel.budgets.isEmpty()) {
+                // Пустое состояние (добавлен verticalScroll, чтобы свайп работал даже когда список пуст)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -117,12 +138,13 @@ fun BudgetListScreen(
                     }
                 }
             } else {
+                // Список бюджетов
                 LazyColumn(
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(budgetViewModel.budgets, key = { it.id }) { budget ->
-                        // Больше не считаем currentSpent, сервер всё сделал за нас
                         BudgetCardItem(
                             budget = budget,
                             onClick = { selectedBudgetForEdit = budget }
@@ -155,9 +177,8 @@ fun BudgetCardItem(
     budget: BudgetResponse,
     onClick: () -> Unit
 ) {
-    // Сервер отдает usagePercent от 0 до 100, переводим в 0.0 - 1.0
     val progress = (budget.usagePercent / 100.0).toFloat().coerceIn(0f, 1f)
-    val isExceeded = budget.isExceeded // Сервер сам сказал, превышен ли лимит!
+    val isExceeded = budget.isExceeded
     val isWarning = !isExceeded && progress >= 0.8f
 
     val progressColor = when {
@@ -166,7 +187,6 @@ fun BudgetCardItem(
         else -> MaterialTheme.colorScheme.primary
     }
 
-    // Переводим "FOOD" с сервера в "Еда" для UI
     val uiCategory = budget.category?.let { FinanceMapper.categoryToUi(it) } ?: "Общий"
 
     Card(
@@ -182,7 +202,6 @@ fun BudgetCardItem(
             ) {
                 Text(text = uiCategory, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    // Используем spentAmount и limitAmount напрямую с сервера
                     text = "${budget.spentAmount.toInt()} / ${budget.limitAmount.toInt()} ${budget.currency}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isExceeded) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -208,8 +227,7 @@ fun BudgetCardItem(
                         Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD32F2F))
                         Spacer(modifier = Modifier.padding(horizontal = 4.dp))
                         Text(
-                            // Используем remainingAmount с сервера (остаток)
-                            text = "Превышение на ${Math.abs(budget.remainingAmount).toInt()} ${budget.currency}!",
+                            text = "Превышение на ${(budget.spentAmount - budget.limitAmount).toInt()} ${budget.currency}!",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFFD32F2F)
                         )
@@ -229,7 +247,6 @@ fun SetBudgetDialog(
 ) {
     val categories = listOf("Общий", "Еда", "Транспорт", "Развлечения", "Коммуналка", "Покупки", "Другое")
 
-    // Инициализируем категорию правильно: переводим код с сервера в русское название
     var selectedCategory by remember {
         mutableStateOf(
             initialBudget?.category?.let { FinanceMapper.categoryToUi(it) } ?: "Общий"
@@ -245,7 +262,6 @@ fun SetBudgetDialog(
         title = { Text(if (isEditing) "Изменить лимит бюджета" else "Установка лимита бюджета") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // При редактировании категорию менять нельзя (по Swagger PATCH принимает только limitAmount)
                 if (isEditing) {
                     OutlinedTextField(
                         value = selectedCategory,
@@ -309,7 +325,7 @@ fun SetBudgetDialog(
             Button(
                 onClick = {
                     budgetViewModel.saveBudget(
-                        budgetId = initialBudget?.id, // null при создании, id при редактировании
+                        budgetId = initialBudget?.id,
                         category = selectedCategory,
                         limitAmountStr = limitStr,
                         currency = "RUB",
