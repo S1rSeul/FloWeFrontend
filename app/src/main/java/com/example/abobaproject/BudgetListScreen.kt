@@ -228,42 +228,62 @@ fun SetBudgetDialog(
     onDismiss: () -> Unit
 ) {
     val categories = listOf("Общий", "Еда", "Транспорт", "Развлечения", "Коммуналка", "Покупки", "Другое")
-    var selectedCategory by remember { mutableStateOf(initialBudget?.category ?: "Общий") }
+
+    // Инициализируем категорию правильно: переводим код с сервера в русское название
+    var selectedCategory by remember {
+        mutableStateOf(
+            initialBudget?.category?.let { FinanceMapper.categoryToUi(it) } ?: "Общий"
+        )
+    }
     var limitStr by remember { mutableStateOf(initialBudget?.limitAmount?.toInt()?.toString() ?: "") }
     var expanded by remember { mutableStateOf(false) }
 
+    val isEditing = initialBudget != null
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialBudget != null) "Изменить лимит бюджета" else "Установка лимита бюджета") },
+        title = { Text(if (isEditing) "Изменить лимит бюджета" else "Установка лимита бюджета") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                // При редактировании категорию менять нельзя (по Swagger PATCH принимает только limitAmount)
+                if (isEditing) {
                     OutlinedTextField(
                         value = selectedCategory,
                         onValueChange = {},
                         readOnly = true,
+                        enabled = false,
                         label = { Text("Категория") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
+                } else {
+                    ExposedDropdownMenuBox(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        categories.forEach { category ->
-                            DropdownMenuItem(
-                                text = { Text(category) },
-                                onClick = {
-                                    selectedCategory = category
-                                    expanded = false
-                                }
-                            )
+                        OutlinedTextField(
+                            value = selectedCategory,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Категория") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category) },
+                                    onClick = {
+                                        selectedCategory = category
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -288,7 +308,8 @@ fun SetBudgetDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    budgetViewModel.setBudget(
+                    budgetViewModel.saveBudget(
+                        budgetId = initialBudget?.id, // null при создании, id при редактировании
                         category = selectedCategory,
                         limitAmountStr = limitStr,
                         currency = "RUB",
@@ -301,10 +322,10 @@ fun SetBudgetDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (initialBudget != null) {
+                if (isEditing) {
                     OutlinedButton(
                         onClick = {
-                            budgetViewModel.deleteBudget(initialBudget.id)
+                            budgetViewModel.deleteBudget(initialBudget!!.id)
                             onDismiss()
                         }
                     ) {
